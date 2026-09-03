@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Калькулятор риска — Криптоакадемия Гунсамбо</title>
+<style>
+:root{
+  --bg:#0b0f14; --bg2:#111820; --card:#151d26; --card2:#1a232e;
+  --line:#26313d; --line2:#334150;
+  --tx:#e8eef4; --tx2:#93a3b3; --tx3:#63727f;
+  --acc:#00d395; --acc-d:#00a878;
+  --red:#ff5c5c; --red-d:#c93a3a;
+  --amber:#ffb020; --blue:#4a9eff; --violet:#a78bfa;
+  --r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--tx);
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  padding:0 0 80px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+
+header{padding:26px 0 16px;border-bottom:1px solid var(--line);margin-bottom:20px}
+h1{font-size:26px;font-weight:700;letter-spacing:-.4px}
+h1 span{color:var(--acc)}
+.sub{color:var(--tx2);font-size:14px;margin-top:6px}
+
+.tabs{display:flex;gap:6px;margin:16px 0 22px;background:var(--bg2);padding:5px;border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{flex:1;min-width:max-content;padding:11px 16px;border:0;border-radius:9px;background:none;color:var(--tx2);
+  font:600 14px/1 inherit;cursor:pointer;white-space:nowrap;transition:.15s}
+.tab.on{background:var(--card2);color:var(--tx);box-shadow:0 1px 3px #0006}
+.tab:hover:not(.on){color:var(--tx)}
+.page{display:none}.page.on{display:block}
+
+.grid{display:grid;grid-template-columns:minmax(0,375px) minmax(0,1fr);gap:20px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+/* на телефоне главный ответ уезжает наверх и прилипает — видно, пока крутишь поля */
+#mtop:not(:empty){position:sticky;top:0;z-index:30;padding-top:8px;
+  background:linear-gradient(180deg,var(--bg) 78%,transparent);margin-bottom:14px}
+#mtop .answer{margin-bottom:8px;box-shadow:0 8px 24px #0009}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:16px}
+.card h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-bottom:16px}
+.card h3{font-size:17px;font-weight:700;margin-bottom:10px}
+
+.f{margin-bottom:14px}
+.f label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--tx2);margin-bottom:6px;font-weight:500}
+.f label .opt{color:var(--tx3);font-weight:400;font-size:12px}
+.ip{position:relative}
+.ip input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 46px 12px 13px;color:var(--tx);font:600 16px/1 inherit;outline:0;transition:.15s}
+.ip input:focus{border-color:var(--acc);box-shadow:0 0 0 3px #00d39522}
+.ip .u{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:13px;font-weight:600;pointer-events:none}
+.ip.key input{border-color:var(--acc);background:#0d1d1a;font-size:19px;padding-top:14px;padding-bottom:14px}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+
+.seg{display:flex;gap:4px;background:var(--bg);padding:4px;border-radius:10px;border:1px solid var(--line2)}
+.seg button{flex:1;padding:9px 6px;border:0;border-radius:7px;background:none;color:var(--tx2);font:600 13px/1 inherit;cursor:pointer;transition:.15s}
+.seg button.on{background:var(--card2);color:var(--tx)}
+.seg button.on.long{background:var(--acc-d);color:#fff}
+.seg button.on.short{background:var(--red-d);color:#fff}
+.seg.big button{padding:12px 6px;font-size:14px}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.chip{padding:5px 10px;border:1px solid var(--line2);border-radius:20px;background:var(--bg);color:var(--tx2);
+  font:600 12px/1 inherit;cursor:pointer;transition:.15s;user-select:none}
+.chip:hover{border-color:var(--acc);color:var(--tx)}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#04140f}
+
+.q{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+  background:var(--line2);color:var(--tx2);font:700 10px/1 inherit;cursor:pointer;flex-shrink:0;user-select:none}
+.q:hover{background:var(--acc);color:#04140f}
+.hint{display:none;margin-top:8px;padding:11px 13px;background:var(--bg2);border-left:2px solid var(--acc);
+  border-radius:0 8px 8px 0;font-size:13px;line-height:1.6;color:var(--tx2)}
+.hint.on{display:block}
+.hint b{color:var(--tx)}
+.hint .fx{display:block;margin-top:7px;padding:8px 10px;background:#0006;border-radius:6px;
+  font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--acc)}
+
+/* ── ГЛАВНЫЙ ОТВЕТ ── */
+.answer{background:linear-gradient(135deg,#0d2a22,#123a2f);border:1px solid #1d6b52;border-radius:16px;padding:22px;margin-bottom:16px}
+.answer .cap{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#4ee0ac;margin-bottom:8px}
+.answer .amt{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.answer .amt b{font:800 44px/1 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:-1.5px;color:#fff;font-variant-numeric:tabular-nums}
+@media(max-width:520px){.answer .amt b{font-size:34px}}
+.answer .amt .cp{padding:7px 12px;border:1px solid #2f8a6c;border-radius:8px;background:#0b241d;color:#8ef0cb;
+  font:600 12px/1 inherit;cursor:pointer;transition:.15s}
+.answer .amt .cp:hover{background:#12362b}
+.answer .exp{color:#a8dfcb;font-size:13px;margin-top:10px;line-height:1.5}
+.answer .exp b{color:#fff}
+.answer .sec{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid #1d6b5266}
+.answer .sec div{font-size:13px;color:#8fc7b4}
+.answer .sec div b{display:block;color:#fff;font:700 17px/1.3 inherit;font-variant-numeric:tabular-nums}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+td{padding:11px 0;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+td:last-child{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{color:var(--tx2)}
+tr.tot td{border-top:2px solid var(--line2);border-bottom:0;padding-top:13px;font-size:16px}
+tr.tot td:first-child{color:var(--tx);font-weight:700}
+tr.sm td{padding-top:0;border:0;font-size:13px;color:var(--tx3)}
+.g{color:var(--acc)}.r{color:var(--red)}.a{color:var(--amber)}.b{color:var(--blue)}.m{color:var(--tx3)}
+
+.alert{border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:14px;line-height:1.55;display:flex;gap:11px;align-items:flex-start}
+.alert .ic{font-size:18px;line-height:1.2}
+.alert.err{background:#3a1518;border:1px solid #7a2a2e;color:#ffc9c9}
+.alert.warn{background:#3a2e10;border:1px solid #7a601e;color:#ffe4a8}
+.alert.ok{background:#0e2d24;border:1px solid #1d5b47;color:#a8f0d8}
+.alert b{color:#fff}
+
+.scale{margin-bottom:20px}.scale:last-child{margin-bottom:0}
+.scale .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:12px}
+.scale .nm{font-size:14px;font-weight:600}
+.scale .nm em{font-style:normal;color:var(--tx3);font-weight:500;font-size:12px;display:block;margin-top:2px}
+.scale .pc{font:700 18px/1 inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{height:12px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;border-radius:5px;transition:width .3s}
+.bar i.price{background:linear-gradient(90deg,#4a9eff,#a78bfa)}
+.bar i.depo{background:linear-gradient(90deg,#ff5c5c,#ff8f5c)}
+.scale .cp2{font-size:12px;color:var(--tx3);margin-top:6px}
+
+.wf{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.wfr{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.wfr:last-child{border-bottom:0}
+.wfr .l{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--tx2);min-width:0}
+.wfr .l .dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.wfr .v{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wfr.h{border-bottom:2px solid var(--line2);padding-bottom:11px}
+.wfr.h .l{color:var(--tx);font-weight:600}
+.wfr.f{border-top:2px solid var(--line2);border-bottom:0;padding-top:12px;margin-top:4px}
+.wfr.f .l{color:var(--tx);font-weight:700;font-size:15px}
+.wfr.f .v{font-size:19px}
+
+.prose{max-width:760px}
+.prose h2{font-size:22px;margin:32px 0 12px;letter-spacing:-.3px;color:var(--tx)}
+.prose h2:first-child{margin-top:0}
+.prose h3{font-size:16px;margin:20px 0 8px;color:var(--acc)}
+.prose p{color:var(--tx2);margin-bottom:12px}
+.prose b,.prose strong{color:var(--tx);font-weight:600}
+.prose ul{margin:0 0 12px 18px;color:var(--tx2)}
+.prose li{margin-bottom:7px}
+.fx{display:block;margin:10px 0;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;
+  font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--acc);overflow-x:auto;white-space:pre}
+.fx u{text-decoration:none;color:var(--tx3)}
+.ex{background:var(--card2);border-radius:10px;padding:14px 16px;margin:12px 0;font-size:14px;color:var(--tx2);border-left:3px solid var(--blue)}
+.ex b{color:var(--tx)}
+.note{background:#2a1f10;border-left:3px solid var(--amber);border-radius:0 10px 10px 0;padding:14px 16px;margin:14px 0;font-size:14px;color:#ffe4a8}
+.note b{color:#fff}
+
+.simgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.simgrid{grid-template-columns:1fr}}
+.simcard{border-radius:12px;padding:18px;border:1px solid var(--line)}
+.simcard.a{background:#0e2620;border-color:#1d5b47}
+.simcard.b{background:#2d1518;border-color:#7a2a2e}
+.simcard .hd{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px}
+.simcard.a .hd{color:var(--acc)}.simcard.b .hd{color:var(--red)}
+.simcard .big2{font:700 30px/1 inherit;font-variant-numeric:tabular-nums;margin-bottom:4px}
+.simcard .sm2{font-size:12px;color:var(--tx3);margin-bottom:14px}
+.simcard table td{padding:8px 0;border-color:#ffffff10;font-size:13px}
+canvas{width:100%;height:auto;display:block;margin-top:12px;border-radius:8px}
+
+.btn{width:100%;padding:13px;border:0;border-radius:10px;background:var(--acc);color:#04140f;font:700 15px/1 inherit;cursor:pointer;transition:.15s}
+.btn:hover{background:#00e8a5}
+.btn.gh{background:var(--bg);border:1px solid var(--line2);color:var(--tx2)}
+.btn.gh:hover{border-color:var(--acc);color:var(--tx)}
+footer{text-align:center;color:var(--tx3);font-size:13px;padding:36px 0 0;border-top:1px solid var(--line);margin-top:36px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Калькулятор <span>риск-менеджмента</span></h1>
+  <div class="sub">Криптоакадемия Гунсамбо Ошорова · вбил три цифры — получил объём входа</div>
+</header>
+
+<div class="tabs">
+  <button class="tab on" data-p="calc">Калькулятор</button>
+  <button class="tab" data-p="money">Где мои деньги</button>
+  <button class="tab" data-p="sim">Почему 1%, а не 10%</button>
+  <button class="tab" data-p="help">Инструкция и формулы</button>
+</div>
+
+<!-- ══════════ КАЛЬКУЛЯТОР ══════════ -->
+<div class="page on" id="p-calc">
+<div id="mtop"></div>
+<div class="grid">
+
+  <div>
+    <div class="card">
+      <h2>Твои цифры</h2>
+
+      <div class="f">
+        <div class="seg big" id="mode">
+          <button class="on" data-v="fast">⚡ Быстро — по процентам</button>
+          <button data-v="price">📈 По ценам</button>
+        </div>
+      </div>
+
+      <div class="f">
+        <label>Депозит <span class="q" data-h="h-dep">?</span></label>
+        <div class="ip"><input type="number" id="cap" value="1000" step="any"><span class="u">$</span></div>
+        <div class="hint" id="h-dep"><b>Весь твой капитал на бирже.</b> Не сумма сделки, а всё, что у тебя есть. Именно от этой цифры считается риск.</div>
+      </div>
+
+      <div class="f">
+        <label>Риск на сделку <span class="q" data-h="h-risk">?</span></label>
+        <div class="ip"><input type="number" id="risk" value="1" step="any"><span class="u">%</span></div>
+        <div class="chips" id="riskchips">
+          <span class="chip" data-v="0.5">0.5%</span><span class="chip on" data-v="1">1%</span>
+          <span class="chip" data-v="2">2%</span><span class="chip" data-v="3">3%</span>
+        </div>
+        <div class="hint" id="h-risk"><b>Сколько денег ты готов потерять, если сделка не пойдёт.</b> Процент <b>от депозита</b>, а не от цены монеты.
+          <span class="fx">Риск в $ = Депозит × Риск% ÷ 100</span>
+          Депозит $1000, риск 1% → готов отдать $10. Всё, эта цифра больше не меняется, какой бы ни был стоп.</div>
+      </div>
+
+      <!-- БЫСТРЫЙ РЕЖИМ -->
+      <div class="mfast">
+        <div class="f">
+          <label>Процент стоп-лосса <span class="q" data-h="h-sp">?</span></label>
+          <div class="ip key"><input type="number" id="stopPct" value="2" step="any"><span class="u">%</span></div>
+          <div class="hint" id="h-sp"><b>Насколько далеко твой стоп от входа — в процентах хода монеты.</b> Ровно та цифра, которую биржа показывает рядом со стоп-лоссом.
+            <span class="fx">Стоп% = |Вход − Стоп| ÷ Вход × 100</span>
+            <b>Это НЕ то, сколько ты потеряешь с депозита.</b> Стоп хоть 1%, хоть 30% — с депозита уйдёт ровно тот риск, что ты поставил выше. Меняется только объём.</div>
+        </div>
+        <div class="f">
+          <label>Процент тейк-профита <span class="q" data-h="h-tp">?</span></label>
+          <div class="ip"><input type="number" id="takePct" value="6" step="any"><span class="u">%</span></div>
+          <div class="chips" id="rrchips">
+            <span class="chip" data-v="1.5">RR 1:1.5</span><span class="chip" data-v="2">1:2</span>
+            <span class="chip on" data-v="3">1:3</span><span class="chip" data-v="5">1:5</span>
+          </div>
+          <div class="hint" id="h-tp"><b>Насколько далеко тейк от входа — тоже в процентах хода монеты.</b> Кнопки ставят его автоматически:
+            RR 1:3 значит «тейк втрое дальше стопа». Если риск 1% от депозита, такой тейк принесёт около 3% от депозита.</div>
+        </div>
+      </div>
+
+      <!-- РЕЖИМ ПО ЦЕНАМ -->
+      <div class="mprice hide">
+        <div class="f">
+          <label>Направление</label>
+          <div class="seg" id="dir">
+            <button class="on long" data-v="long">Лонг ↑</button>
+            <button data-v="short">Шорт ↓</button>
+          </div>
+        </div>
+        <div class="f">
+          <label>Цена входа</label>
+          <div class="ip"><input type="number" id="entry" value="60000" step="any"><span class="u">$</span></div>
+        </div>
+        <div class="f">
+          <label>Стоп-лосс <span class="opt">— цена</span></label>
+          <div class="ip key"><input type="number" id="stop" value="58800" step="any"><span class="u">$</span></div>
+        </div>
+        <div class="f">
+          <label>Тейк-профит <span class="opt">— цена</span></label>
+          <div class="ip"><input type="number" id="take" value="63600" step="any"><span class="u">$</span></div>
+          <div class="chips" id="rrchips2">
+            <span class="chip" data-v="1.5">RR 1:1.5</span><span class="chip" data-v="2">1:2</span>
+            <span class="chip on" data-v="3">1:3</span><span class="chip" data-v="5">1:5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="f fut">
+        <label>Плечо <span class="q" data-h="h-lev">?</span></label>
+        <div class="ip"><input type="number" id="lev" value="10" step="any"><span class="u">×</span></div>
+        <div class="chips"><span class="chip" id="autolev">⚡ Подобрать безопасное</span></div>
+        <div class="hint" id="h-lev"><b>Плечо не влияет на твой убыток. Совсем.</b> Убыток задаётся стопом и объёмом.
+          Плечо влияет на две вещи: сколько денег заморозится как <b>маржа</b> и <b>где тебя ликвидирует</b>.
+          Больше плечо → меньше маржа, но ликвидация ближе к входу. Если ликвидация окажется ближе стопа — стоп не сработает, тебя вынесет раньше.</div>
+      </div>
+
+      <div class="f mfast">
+        <label>Цена монеты <span class="opt">— не обязательно, только чтобы узнать количество</span></label>
+        <div class="ip"><input type="number" id="px" placeholder="напр. 60000" step="any"><span class="u">$</span></div>
+      </div>
+
+      <div class="f">
+        <label>Рынок</label>
+        <div class="seg" id="mkt">
+          <button class="on" data-v="fut">Фьючерсы</button>
+          <button data-v="spot">Спот</button>
+        </div>
+      </div>
+
+      <button class="btn gh" id="tgladv">Учесть издержки: комиссии, проскальзывание, фандинг ▾</button>
+    </div>
+
+    <div class="card hide" id="advcard">
+      <h2>Издержки</h2>
+      <div class="f">
+        <label>Комиссия биржи <span class="q" data-h="h-fee">?</span></label>
+        <div class="row2">
+          <div class="ip"><input type="number" id="feeIn" value="0.05" step="any"><span class="u">% вход</span></div>
+          <div class="ip"><input type="number" id="feeOut" value="0.05" step="any"><span class="u">% выход</span></div>
+        </div>
+        <div class="hint" id="h-fee">Комиссия берётся с <b>общего объёма позиции</b>, а не с маржи. Зашёл на $100 маржи с плечом ×10 — комиссию считают с $1000.
+          <span class="fx">Комиссия = Общий объём × Ставка% ÷ 100</span>
+          Тейкер (по рынку) — обычно 0.05%. Мейкер (лимиткой) — 0.02% и ниже.</div>
+      </div>
+      <div class="f">
+        <label>Проскальзывание <span class="q" data-h="h-slip">?</span></label>
+        <div class="ip"><input type="number" id="slip" value="0.05" step="any"><span class="u">%</span></div>
+        <div class="chips" id="slipchips">
+          <span class="chip" data-v="0.15">Скальп 1–5м</span>
+          <span class="chip on" data-v="0.05">Внутри дня 15м–1ч</span>
+          <span class="chip" data-v="0.01">От 4ч и выше</span>
+        </div>
+        <div class="hint" id="h-slip"><b>Твой ордер редко исполняется одной ценой.</b> В стакане просто не хватает ликвидности, чтобы залить весь объём по одной цене.
+          Хочешь взять на $1000 по 60 000 — возьмёшь на $300 по 60 000, на $300 по 60 500, на $300 по 61 000 и остаток по 62 000. Средняя цена входа уехала.
+          <b>Чем короче таймфрейм — тем больнее.</b> На часовиках и выше это копейки.</div>
+      </div>
+      <div class="f fut">
+        <label>Ставка финансирования <span class="q" data-h="h-fund">?</span></label>
+        <div class="row2">
+          <div class="ip"><input type="number" id="fundRate" value="0.01" step="any"><span class="u">%/8ч</span></div>
+          <div class="ip"><input type="number" id="hours" value="8" step="any"><span class="u">часов</span></div>
+        </div>
+        <div class="hint" id="h-fund"><b>Это не комиссия биржи. Это плата между лонгами и шортами</b> — она держит цену фьючерса рядом со спотовой.
+          Списывается каждые 8 часов с <b>общего объёма</b>, а не с маржи.
+          <span class="fx">Фандинг = Общий объём × Ставка% ÷ 100 × (Часов ÷ 8)</span>
+          <b>Ставка плюсовая</b> — лонги платят шортам. <b>Минусовая</b> — шорты платят лонгам.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- РЕЗУЛЬТАТ -->
+  <div id="rcol">
+    <div class="answer" id="answer">
+      <div class="cap">Объём входа — вбивай это в биржу</div>
+      <div class="amt"><b id="o-margin">—</b><button class="cp" id="copy">Скопировать</button></div>
+      <div class="exp" id="o-marginN">—</div>
+      <div class="sec">
+        <div>Общий объём позиции<b id="o-notional">—</b></div>
+        <div id="qtybox" class="hide">Количество монеты<b id="o-qty">—</b></div>
+        <div>Потеряешь по стопу<b id="o-loss" style="color:#ff9c9c">—</b></div>
+      </div>
+    </div>
+
+    <div id="alerts"></div>
+
+    <div class="card">
+      <h2>Что будет в двух сценариях</h2>
+      <table>
+        <tr><td>🔴 Сработал стоп — потеряешь</td><td class="r" id="t-loss">—</td></tr>
+        <tr class="sm"><td>это и есть твой риск на сделку</td><td id="t-lossPct">—</td></tr>
+        <tr><td>🟢 Сработал тейк — заберёшь</td><td class="g" id="t-prof">—</td></tr>
+        <tr class="sm"><td>от депозита</td><td id="t-profPct">—</td></tr>
+        <tr class="tot"><td>Соотношение риск / прибыль</td><td id="t-rr">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Две шкалы — не путай их</h2>
+      <div class="scale">
+        <div class="top"><div class="nm">Ход цены до стопа <em>сколько пройдёт монета</em></div><div class="pc b" id="s-price">—</div></div>
+        <div class="bar"><i class="price" id="b-price" style="width:0"></i></div>
+        <div class="cp2" id="s-priceC">—</div>
+      </div>
+      <div class="scale">
+        <div class="top"><div class="nm">Потеря депозита <em>сколько уйдёт твоих денег</em></div><div class="pc r" id="s-depo">—</div></div>
+        <div class="bar"><i class="depo" id="b-depo" style="width:0"></i></div>
+        <div class="cp2" id="s-depoC">—</div>
+      </div>
+      <div class="alert ok" style="margin:16px 0 0"><span class="ic">💡</span><span id="s-msg">—</span></div>
+    </div>
+
+    <div class="card fut">
+      <h2>Ликвидация</h2>
+      <table>
+        <tr><td>Стоп сработает на ходе</td><td id="o-stopAt">—</td></tr>
+        <tr><td>Ликвидация наступит на ходе</td><td class="a" id="o-liq">—</td></tr>
+        <tr><td>Запас между стопом и ликвидацией</td><td id="o-gap">—</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════ ГДЕ МОИ ДЕНЬГИ ══════════ -->
+<div class="page" id="p-money">
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h3>Куда утекла прибыль</h3>
+        <p style="color:var(--tx2);font-size:14px">Ученик закрывает сделку в плюс, смотрит историю ордеров: комиссия $2 за вход, $2 за выход. А недосчитался $10.
+          Вопрос — где ещё $6? Вот они. Считается по цифрам с вкладки «Калькулятор» — включи там издержки.</p>
+      </div>
+      <div class="card">
+        <h2>По сделке</h2>
+        <table>
+          <tr><td>Объём входа (маржа)</td><td id="m-marg">—</td></tr>
+          <tr><td>Общий объём позиции</td><td id="m-not">—</td></tr>
+          <tr class="sm"><td>с него берутся все издержки</td><td></td></tr>
+          <tr class="tot"><td>Съедено издержками</td><td class="r" id="m-costs">—</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>🟢 Сделка закрылась в плюс</h2>
+        <div class="wf" id="wf-win"></div>
+      </div>
+      <div class="card">
+        <h2>🔴 Сделка закрылась по стопу</h2>
+        <div class="wf" id="wf-loss"></div>
+      </div>
+      <div class="note"><b>Вывод.</b> Издержки берутся с <b>общего объёма</b>, а не с маржи. Больше плечо → больше объём при той же марже → больше отдаёшь бирже и фандингу.
+        На высоких плечах и коротких таймфреймах издержки способны съесть весь профит от сделки 1:1.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ СИМУЛЯТОР ══════════ -->
+<div class="page" id="p-sim">
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Условия</h2>
+        <div class="f"><label>Депозит</label><div class="ip"><input type="number" id="sCap" value="1000" step="any"><span class="u">$</span></div></div>
+        <div class="f"><label>Винрейт — сколько сделок в плюс</label><div class="ip"><input type="number" id="sWin" value="40" step="any"><span class="u">%</span></div>
+          <div class="chips" id="winchips"><span class="chip" data-v="30">30%</span><span class="chip on" data-v="40">40%</span><span class="chip" data-v="50">50%</span><span class="chip" data-v="60">60%</span></div></div>
+        <div class="f"><label>RR — во сколько раз прибыль больше риска</label><div class="ip"><input type="number" id="sRR" value="3" step="any"><span class="u">: 1</span></div></div>
+        <div class="f"><label>Сколько сделок</label><div class="ip"><input type="number" id="sN" value="100" step="1"><span class="u">шт</span></div></div>
+        <button class="btn" id="runsim">Прогнать 2 000 симуляций</button>
+        <p style="color:var(--tx3);font-size:12px;margin-top:10px;line-height:1.5">Сделки идут в случайном порядке — как в жизни. Считаем 2 000 вариантов и смотрим, что бывает.</p>
+      </div>
+    </div>
+    <div>
+      <div class="simgrid">
+        <div class="simcard a">
+          <div class="hd">Риск 1% на сделку</div>
+          <div class="big2" id="r1-med">—</div><div class="sm2">типичный итог депозита</div>
+          <table>
+            <tr><td>Худший из 20 сценариев</td><td id="r1-p5">—</td></tr>
+            <tr><td>Максимальная просадка</td><td id="r1-dd">—</td></tr>
+            <tr><td>Шанс потерять половину</td><td id="r1-ruin">—</td></tr>
+            <tr><td>Шанс слить всё</td><td id="r1-zero">—</td></tr>
+          </table>
+          <canvas id="c1" width="520" height="150"></canvas>
+        </div>
+        <div class="simcard b">
+          <div class="hd">Риск 10% на сделку</div>
+          <div class="big2" id="r10-med">—</div><div class="sm2">типичный итог депозита</div>
+          <table>
+            <tr><td>Худший из 20 сценариев</td><td id="r10-p5">—</td></tr>
+            <tr><td>Максимальная просадка</td><td id="r10-dd">—</td></tr>
+            <tr><td>Шанс потерять половину</td><td id="r10-ruin">—</td></tr>
+            <tr><td>Шанс слить всё</td><td id="r10-zero">—</td></tr>
+          </table>
+          <canvas id="c10" width="520" height="150"></canvas>
+        </div>
+      </div>
+      <div class="alert ok" style="margin-top:16px"><span class="ic">💡</span><span id="sim-msg">Нажми «Прогнать» и посмотри, что делает с депозитом один и тот же торговый план при разном риске.</span></div>
+      <div class="note"><b>Смысл 1%.</b> Стратегия одна и та же, сделки одни и те же. Разница только в размере риска. При 10% даже прибыльная стратегия регулярно уносит депозит в ноль —
+        серия из 8 стопов подряд рано или поздно случается у всех, и отыгрываться после неё уже нечем.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ИНСТРУКЦИЯ ══════════ -->
+<div class="page" id="p-help">
+  <div class="prose">
+
+    <h2>Как пользоваться за 20 секунд</h2>
+    <ul>
+      <li>Вбил <b>депозит</b> — весь капитал на бирже.</li>
+      <li>Поставил <b>риск</b> — 1%.</li>
+      <li>Вбил <b>процент стоп-лосса</b> — ту цифру, которую показывает биржа рядом со стопом.</li>
+      <li>Взял <b>объём входа</b> и вбил в биржу. Всё.</li>
+    </ul>
+    <p>Цены входа и стопа вводить не нужно — пока ты их набираешь, цена уезжает. Проценты достаточно.</p>
+
+    <h2>Главное, что путают все</h2>
+    <p>Есть две разные вещи, и обе называются словом «процент». Пока ты их не разделишь — риск-менеджмент работать не будет.</p>
+
+    <h3>1. Процент стоп-лосса — это про ЦЕНУ МОНЕТЫ</h3>
+    <p>Насколько далеко твой стоп от точки входа. Зашёл по 60 000, стоп на 57 000 — это стоп <b>5%</b>. Пять процентов <b>хода биткоина</b>. К твоему депозиту эта цифра отношения не имеет.</p>
+
+    <h3>2. Риск на сделку — это про ТВОИ ДЕНЬГИ</h3>
+    <p>Сколько долларов ты готов отдать рынку, если ошибся. Депозит $1000, риск 1% — значит ты готов потерять <b>$10</b>. Всё.</p>
+
+    <div class="note"><b>Стоп 5% ≠ минус 5% от депозита.</b><br>
+      Это самая дорогая ошибка новичка. Стоп может быть хоть 1%, хоть 30% — ты всё равно потеряешь ровно <b>1% от депозита</b>, если поставил риск 1%.
+      Потому что калькулятор под этот стоп подбирает <b>объём</b>. Далёкий стоп → меньше объём. Близкий стоп → больше объём. Убыток в долларах — один и тот же.</div>
+
+    <div class="ex"><b>Проверь сам.</b> Депозит $1000, риск 1% = $10.<br>
+      • Стоп 2% → объём позиции $500. Падение на 2%: 500 × 2% = <b>$10</b>.<br>
+      • Стоп 5% → объём позиции $200. Падение на 5%: 200 × 5% = <b>$10</b>.<br>
+      • Стоп 20% → объём позиции $50. Падение на 20%: 50 × 20% = <b>$10</b>.<br>
+      Три разных стопа. Убыток везде $10. Меняется только объём.</div>
+
+    <h2>Как считает калькулятор</h2>
+    <p>Ты задаёшь <b>риск</b> и <b>процент стопа</b> — калькулятор находит <b>объём</b>. Не наоборот.</p>
+    <span class="fx"><u>шаг 1.</u> Риск в $      = Депозит × Риск% ÷ 100
+<u>шаг 2.</u> Общий объём  = Риск в $ ÷ Стоп% × 100
+<u>шаг 3.</u> Объём входа  = Общий объём ÷ Плечо   <u>(это и есть маржа)</u></span>
+    <p>Плечо появляется <b>только на третьем шаге</b>. На убыток оно не влияет — влияет на то, сколько денег заморозится и где будет ликвидация.</p>
+
+    <h2>Маржа — что это</h2>
+    <p><b>Маржа — это то, что реально спишется с баланса биржи.</b> В таблице она называлась «объём входа». Общий объём — размер позиции, которой ты управляешь.</p>
+    <span class="fx">Общий объём = Объём входа (маржа) × Плечо
+Объём входа = Общий объём ÷ Плечо</span>
+    <div class="ex">Зашёл на <b>$30 маржи</b> с плечом <b>×10</b>. С баланса ушло $30. Но позицией ты управляешь на <b>$300</b>.<br>
+      Все издержки — комиссия, фандинг — считаются с этих <b>$300</b>, а не с $30. Вот почему на больших плечах комиссии кажутся неадекватными.</div>
+
+    <h2>Тейк-профит и RR</h2>
+    <p>Тейк — процент, на котором ты фиксируешь прибыль. RR — во сколько раз он больше стопа.</p>
+    <p>Если риск на сделку 1% от депозита, то <b>тейк на RR 1:3 принесёт около 3% от депозита</b>. Поэтому 1:3 — рабочий минимум: можно ошибаться в 6 сделках из 10 и всё равно быть в плюсе.</p>
+    <span class="fx">RR = Процент тейка ÷ Процент стопа</span>
+
+    <h2>Комиссия биржи</h2>
+    <p>Берётся <b>дважды</b>: за открытие и за закрытие. И считается с <b>общего объёма</b>.</p>
+    <span class="fx">Комиссия = Общий объём × Ставка% ÷ 100 × 2</span>
+    <ul>
+      <li><b>Тейкер</b> — забираешь ликвидность (рыночный ордер). Дороже, обычно 0.05%.</li>
+      <li><b>Мейкер</b> — ставишь лимитку и ждёшь. Дешевле, 0.02% и ниже.</li>
+    </ul>
+
+    <h2>Проскальзывание — куда девались деньги</h2>
+    <p>Ты хочешь войти на $1000 по цене биткоина 60 000. Но в стакане по 60 000 стоит заявок всего на $300. Биржа заливает твой ордер по всему, до чего дотянется:</p>
+    <div class="ex">
+      $300 по <b>60 000</b><br>$300 по <b>60 500</b><br>$300 по <b>61 000</b><br>$100 по <b>62 000</b><br>
+      → средняя цена входа <b>60 620</b>, а не 60 000.
+    </div>
+    <p>Ты купил дороже, чем планировал. До стопа теперь ближе, до тейка дальше. Прибыль урезается — тихо, нигде отдельной строчкой не показываясь.</p>
+    <div class="note"><b>Отсюда та самая история.</b> Ученик смотрит историю ордеров: комиссия $2 за вход, $2 за выход — итого $4. А недосчитался $10. «Где ещё $6?»<br>
+      Эти $6 — проскальзывание. Оно не пишется отдельной строкой, оно уже зашито в цену исполнения.</div>
+    <ul>
+      <li><b>Скальпинг, 1–5 минут</b> — проскальзывание огромное, способно съесть всю прибыль сделки.</li>
+      <li><b>От часа и выше</b> — почти незаметно. Ход цены большой, доли процента ничего не решают.</li>
+    </ul>
+
+    <h2>Ставка финансирования (фандинг)</h2>
+    <p><b>Это не комиссия биржи.</b> Биржа тут только посредник. Это плата <b>между лонгами и шортами</b>, чтобы цена фьючерса не убегала от спотовой.</p>
+    <span class="fx">Фандинг = Общий объём × Ставка% ÷ 100     <u>каждые 8 часов</u></span>
+    <ul>
+      <li><b>Ставка положительная</b> → лонги платят шортам.</li>
+      <li><b>Ставка отрицательная</b> → шорты платят лонгам.</li>
+    </ul>
+    <div class="ex"><b>Живой пример.</b> Ученик зашёл в лонг на $10 своих денег с плечом ×100 → общий объём $1000.
+      Ставка положительная. Каждые 8 часов с него списывается фандинг с этой <b>тысячи</b>, а не с десятки.<br><br>
+      А я в этот же момент зашёл в шорт по той же монете. И каждые 8 часов деньги капают <b>мне</b>. Буквально: мой ученик платит мне.<br>
+      Ставка станет отрицательной — всё зеркально, платить буду я ему.</div>
+    <p>Держишь позицию сутки — это <b>три списания</b>.</p>
+
+    <h2>Ликвидация</h2>
+    <p>Ход цены, на котором биржа принудительно закрывает позицию: маржи больше не хватает покрывать убыток. Тут никакой стоп уже не спасёт.</p>
+    <span class="fx">Ликвидация наступит на ходе ≈ 100% ÷ Плечо</span>
+    <div class="note"><b>Железное правило: ликвидация должна быть дальше стопа.</b><br>
+      Стоп 5%, плечо ×50 → ликвидация на 2% хода. Тебя вынесет <b>до того</b>, как сработает стоп, и потеряешь ты не 1% депозита, а всю маржу.<br>
+      Калькулятор проверяет это сам и орёт красным, если запаса нет. Кнопка «⚡ Подобрать безопасное» ставит плечо, при котором ликвидация далеко.</div>
+
+    <h2>Порядок действий</h2>
+    <ul>
+      <li>Депозит — <b>весь</b> капитал на бирже.</li>
+      <li>Риск — <b>1%</b>. Не 5, не 10. Один.</li>
+      <li>Нашёл на графике место, где идея не сработала — посмотрел процент до него, вбил.</li>
+      <li>Тейк — минимум RR 1:3.</li>
+      <li>Проверил: ликвидация далеко от стопа.</li>
+      <li>Зашёл <b>ровно тем объёмом</b>, который показал калькулятор. Не «на глаз», не «плюс-минус».</li>
+    </ul>
+  </div>
+</div>
+
+<footer>Криптоакадемия Гунсамбо Ошорова · всё считается у тебя в браузере, никуда ничего не отправляется</footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const num=id=>parseFloat($(id).value)||0;
+const money=v=>(v<0?'−':'')+'$'+Math.abs(v).toLocaleString('ru-RU',{maximumFractionDigits:Math.abs(v)<10?2:Math.abs(v)<1000?1:0});
+const coin=v=>v>=1?(+v.toFixed(4)).toString():(+v.toPrecision(4)).toString();
+
+let MODE='fast', MKT='fut', DIR='long';
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on'); $('p-'+t.dataset.p).classList.add('on');
+});
+document.querySelectorAll('.q').forEach(q=>q.onclick=()=>$(q.dataset.h).classList.toggle('on'));
+
+$('mode').onclick=e=>{if(!e.target.dataset.v)return;MODE=e.target.dataset.v;
+  [...$('mode').children].forEach(b=>b.classList.toggle('on',b===e.target));
+  document.querySelectorAll('.mfast').forEach(x=>x.classList.toggle('hide',MODE!=='fast'));
+  document.querySelectorAll('.mprice').forEach(x=>x.classList.toggle('hide',MODE!=='price'));
+  calc();};
+$('mkt').onclick=e=>{if(!e.target.dataset.v)return;MKT=e.target.dataset.v;
+  [...$('mkt').children].forEach(b=>b.classList.toggle('on',b===e.target));
+  document.querySelectorAll('.fut').forEach(x=>x.classList.toggle('hide',MKT!=='fut'));calc();};
+$('dir').onclick=e=>{if(!e.target.dataset.v)return;DIR=e.target.dataset.v;
+  [...$('dir').children].forEach(b=>{b.classList.toggle('on',b===e.target);
+    b.classList.toggle('long',b.dataset.v==='long');b.classList.toggle('short',b.dataset.v==='short');});
+  const E=num('entry'),d=Math.abs(E-num('stop'))||E*0.02;
+  $('stop').value=+(DIR==='long'?E-d:E+d).toFixed(2); applyRRprice(rrOf('rrchips2')); calc();};
+
+$('tgladv').onclick=()=>{const c=$('advcard'),o=c.classList.contains('hide');
+  c.classList.toggle('hide'); $('tgladv').textContent=o?'Скрыть издержки ▴':'Учесть издержки: комиссии, проскальзывание, фандинг ▾';};
+
+$('copy').onclick=()=>{const v=$('o-margin').textContent.replace(/[^\d.,]/g,'').replace(',','.');
+  try{navigator.clipboard.writeText(v)}catch(e){
+    const t=document.createElement('textarea');t.value=v;t.style.position='fixed';t.style.opacity=0;
+    document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(_){}t.remove();
+  }
+  $('copy').textContent='Скопировано ✓'; setTimeout(()=>$('copy').textContent='Скопировать',1400);};
+
+/* если сидим внутри iframe (Тильда) — сообщаем родителю свою высоту */
+if(window.parent!==window){
+  const ph=()=>parent.postMessage({gcalcHeight:document.documentElement.scrollHeight},'*');
+  new ResizeObserver(ph).observe(document.body);
+  window.addEventListener('load',ph); setTimeout(ph,300);
+}
+
+function chipset(box,cb){$(box).onclick=e=>{if(!e.target.dataset.v)return;
+  [...$(box).children].forEach(c=>c.classList.toggle('on',c===e.target));cb(parseFloat(e.target.dataset.v));};}
+function rrOf(box){const c=$(box).querySelector('.on');return c?parseFloat(c.dataset.v):null;}
+chipset('riskchips',v=>{$('risk').value=v;calc();});
+chipset('slipchips',v=>{$('slip').value=v;calc();});
+chipset('winchips',v=>{$('sWin').value=v;});
+chipset('rrchips',v=>{$('takePct').value=+(num('stopPct')*v).toFixed(3);calc();});
+chipset('rrchips2',v=>{applyRRprice(v);calc();});
+function applyRRprice(rr){if(!rr)return;const E=num('entry'),d=Math.abs(E-num('stop'));
+  $('take').value=+(DIR==='long'?E+d*rr:E-d*rr).toFixed(2);}
+
+$('autolev').onclick=()=>{const sf=stopFrac();if(!sf)return;
+  $('lev').value=Math.min(125,Math.max(1,Math.floor(1/(2.2*sf+0.005))));calc();};
+function stopFrac(){
+  if(MODE==='fast')return num('stopPct')/100;
+  const E=num('entry');return E?Math.abs(E-num('stop'))/E:0;
+}
+
+['cap','risk','lev','feeIn','feeOut','slip','fundRate','hours','px'].forEach(id=>$(id).oninput=calc);
+$('stopPct').oninput=()=>{const rr=rrOf('rrchips');if(rr)$('takePct').value=+(num('stopPct')*rr).toFixed(3);calc();};
+$('takePct').oninput=()=>{[...$('rrchips').children].forEach(c=>c.classList.remove('on'));calc();};
+['entry','stop'].forEach(id=>$(id).oninput=()=>{applyRRprice(rrOf('rrchips2'));calc();});
+$('take').oninput=()=>{[...$('rrchips2').children].forEach(c=>c.classList.remove('on'));calc();};
+
+/* ── ЯДРО. Всё считается в процентах от объёма — цены не нужны ── */
+function model(){
+  const C=num('cap'), r=num('risk');
+  const L=MKT==='spot'?1:Math.max(1,num('lev'));
+  const s=num('slip')/100, fi=num('feeIn')/100, fo=num('feeOut')/100;
+  const fk=(MKT==='spot'?0:num('fundRate')/100)*(num('hours')/8);
+  let sp,tp,long,px=0,E=0,S=0,T=0;
+  if(MODE==='fast'){
+    sp=num('stopPct')/100; tp=num('takePct')/100; long=true; px=num('px');
+    if(px>0){E=px;S=E*(1-sp);T=E*(1+tp);}
+  }else{
+    E=num('entry');S=num('stop');T=num('take');long=DIR==='long';px=E;
+    sp=E?Math.abs(E-S)/E:0; tp=E?Math.abs(T-E)/E:0;
+  }
+  const R=C*r/100;
+  const fundSign=long?1:-1;                       // лонг платит при плюсовой ставке
+  /* На 1$ общего объёма (N) при срабатывании стопа теряется:
+     ход цены sp + проскальзывание на входе и на выходе (2s)
+     + комиссия вход fi + комиссия выход fo·(1−sp) + фандинг fk        */
+  const lossPer1 = sp + 2*s + fi + fo*(1-sp) + fk*fundSign;
+  const N = lossPer1>0 ? R/lossPer1 : 0;          // общий объём позиции
+  const M = N/L;                                  // объём входа = маржа
+  const qty = px>0 ? N/px : 0;
+
+  const feeIn$=N*fi, feeOutS$=N*(1-sp)*fo, feeOutT$=N*(1+tp)*fo;
+  const fund$=N*fk*fundSign, slip$=N*2*s;
+  const grossL=N*sp, grossP=N*tp;
+  const netL=grossL+slip$+feeIn$+feeOutS$+fund$;                 // = R
+  const netP=grossP-slip$-feeIn$-feeOutT$-fund$;
+  const rrG=sp>0?tp/sp:0, rrN=netL>0?netP/netL:0;
+  const mmr=0.005;
+  const liqPct=MKT==='spot'?1:Math.max(0,1/L-mmr);
+  const liqPx=px>0?(long?px*(1-liqPct):px*(1+liqPct)):0;
+  const stopPx=px>0?(long?px*(1-sp):px*(1+sp)):0;
+  return {C,r,R,L,N,M,qty,px,E,S,T,sp,tp,long,
+          feeIn$,feeOutS$,feeOutT$,fund$,slip$,grossL,grossP,netL,netP,rrG,rrN,
+          liqPct,liqPx,stopPx,costsW:slip$+feeIn$+feeOutT$+fund$,costsL:slip$+feeIn$+feeOutS$+fund$};
+}
+
+function calc(){
+  const m=model();
+  const A=[];
+  const ok=m.C>0&&m.sp>0&&m.N>0&&isFinite(m.N);
+
+  if(MODE==='price'){
+    const E=num('entry'),S=num('stop'),T=num('take');
+    if(E>0&&S>0&&(m.long?S>=E:S<=E)) A.push(['err','⛔',`Стоп не с той стороны. В <b>${m.long?'лонге он должен быть НИЖЕ':'шорте он должен быть ВЫШЕ'}</b> цены входа.`]);
+    if(E>0&&T>0&&(m.long?T<=E:T>=E)) A.push(['err','⛔',`Тейк не с той стороны. В <b>${m.long?'лонге он должен быть ВЫШЕ':'шорте он должен быть НИЖЕ'}</b> цены входа.`]);
+  }
+  if(!ok&&!A.length) A.push(['warn','⚠️','Заполни депозит и процент стоп-лосса.']);
+
+  if(ok&&!A.length){
+    if(MKT==='fut'){
+      if(m.liqPct<=m.sp)
+        A.push(['err','⛔',`<b>Ликвидация ближе стопа.</b> Тебя вынесет на ${(m.liqPct*100).toFixed(2)}% хода — раньше, чем сработает стоп на ${(m.sp*100).toFixed(2)}%. Потеряешь не ${money(m.R)}, а всю маржу ${money(m.M)}. <b>Уменьши плечо</b> — жми «⚡ Подобрать безопасное».`]);
+      else if(m.liqPct<m.sp*1.8)
+        A.push(['warn','⚠️',`<b>Ликвидация опасно близко.</b> Стоп на ${(m.sp*100).toFixed(2)}% хода, ликвидация на ${(m.liqPct*100).toFixed(2)}%. Один фитиль — и вынесет до стопа. Убавь плечо.`]);
+    }
+    if(m.M>m.C)
+      A.push(['err','⛔',MKT==='spot'
+        ? `<b>Не хватает денег.</b> Чтобы рискнуть ${money(m.R)} при стопе ${(m.sp*100).toFixed(1)}%, нужно купить на ${money(m.M)} — а депозит ${money(m.C)}. Отодвинь стоп или уменьши риск.`
+        : `<b>Не хватает денег.</b> Нужен объём входа ${money(m.M)}, а депозит ${money(m.C)}. Увеличь плечо или отодвинь стоп.`]);
+    else if(m.M>m.C*0.5)
+      A.push(['warn','⚠️',`Объём входа ${money(m.M)} — это ${(m.M/m.C*100).toFixed(0)}% депозита в одной сделке. Свободных денег почти не остаётся.`]);
+    if(m.r>3) A.push(['warn','⚠️',`<b>Риск ${m.r}% — это много.</b> Серия из 8 стопов подряд бывает у всех. Загляни во вкладку «Почему 1%, а не 10%».`]);
+    if(m.rrN>0&&m.rrN<1.5) A.push(['warn','⚠️',`<b>Чистый RR всего 1:${m.rrN.toFixed(2)}.</b> После издержек прибыль почти сравнялась с риском — сделка невыгодна.`]);
+    if(!A.length) A.push(['ok','✅',`Всё чисто. Рискуешь <b>${money(m.R)}</b>, чтобы взять <b>${money(m.netP)}</b>. Объём входа — <b>${money(m.M)}</b>.`]);
+  }
+  $('alerts').innerHTML=A.map(([c,i,t])=>`<div class="alert ${c}"><span class="ic">${i}</span><span>${t}</span></div>`).join('');
+
+  if(!ok){$('o-margin').textContent='—';$('o-notional').textContent='—';$('o-loss').textContent='—';return;}
+
+  $('o-margin').textContent=money(m.M);
+  $('o-marginN').innerHTML=MKT==='spot'
+    ? `Столько уйдёт на покупку. Это и есть весь твой объём — плеча на споте нет.`
+    : `Столько <b>спишется с баланса биржи</b>. Это маржа. При плече <b>×${m.L}</b> она держит позицию на ${money(m.N)}.`;
+  $('o-notional').textContent=money(m.N);
+  $('qtybox').classList.toggle('hide',!(m.qty>0));
+  if(m.qty>0)$('o-qty').textContent=coin(m.qty);
+  $('o-loss').textContent='−'+money(m.netL);
+
+  $('t-loss').textContent='−'+money(m.netL);
+  $('t-lossPct').textContent='−'+(m.netL/m.C*100).toFixed(2)+'% от депозита';
+  $('t-prof').textContent='+'+money(m.netP);
+  $('t-profPct').textContent='+'+(m.netP/m.C*100).toFixed(2)+'%';
+  $('t-rr').innerHTML=`<span class="${m.rrN>=2?'g':m.rrN>=1.5?'a':'r'}">1 : ${m.rrN.toFixed(2)}</span> <span class="m" style="font-weight:400;font-size:13px">(без издержек 1:${m.rrG.toFixed(1)})</span>`;
+
+  const spP=m.sp*100, mx=Math.max(spP,m.r,1);
+  $('s-price').textContent=spP.toFixed(2)+'%';
+  $('b-price').style.width=(spP/mx*100)+'%';
+  $('s-priceC').textContent=m.px>0
+    ? `${money(m.px)} → ${money(m.stopPx)} · движение монеты, к твоим деньгам отношения не имеет`
+    : `движение монеты, к твоим деньгам отношения не имеет`;
+  $('s-depo').textContent=m.r.toFixed(2)+'%';
+  $('b-depo').style.width=(m.r/mx*100)+'%';
+  $('s-depoC').textContent=`из ${money(m.C)} потеряешь ${money(m.netL)} · вот это — твои деньги`;
+  $('s-msg').innerHTML=`Стоп на <b>${spP.toFixed(2)}%</b> хода цены — но депозита ты теряешь только <b>${m.r}%</b>. Потому что калькулятор подобрал объём <b>${money(m.N)}</b> ровно под этот стоп. Сделай стоп вдвое дальше — объём станет вдвое меньше, а убыток в долларах не изменится.`;
+
+  if(MKT==='fut'){
+    $('o-stopAt').textContent=spP.toFixed(2)+'% хода'+(m.px>0?` (${money(m.stopPx)})`:'');
+    $('o-liq').textContent=(m.liqPct*100).toFixed(2)+'% хода'+(m.px>0?` (${money(m.liqPx)})`:'');
+    const gap=(m.liqPct-m.sp)*100;
+    $('o-gap').innerHTML=`<span class="${gap<=0?'r':gap<spP*0.8?'a':'g'}">${gap>0?'+':''}${gap.toFixed(2)}% ${gap<=0?'— СТОП НЕ СРАБОТАЕТ':gap<spP*0.8?'— впритык':'— нормально'}</span>`;
+  }
+  moneyTab(m);
+}
+
+function row(cls,color,label,val,sub){
+  return `<div class="wfr ${cls||''}"><div class="l">${color?`<i class="dot" style="background:${color}"></i>`:''}<span>${label}${sub?` <span class="m" style="font-size:12px">${sub}</span>`:''}</span></div><div class="v ${val<0?'r':val>0?'g':''}">${val>0?'+':''}${money(val)}</div></div>`;
+}
+function moneyTab(m){
+  $('m-marg').textContent=money(m.M);
+  $('m-not').textContent=money(m.N);
+  $('m-costs').textContent='−'+money(m.costsW);
+  const fLab=m.fund$>=0?'Фандинг <span class="m">(ты платишь)</span>':'Фандинг <span class="m">(тебе платят)</span>';
+  $('wf-win').innerHTML=
+    row('h','','Прибыль по плану',m.grossP,`тейк ${(m.tp*100).toFixed(2)}% от объёма ${money(m.N)}`)+
+    row('','#ff5c5c','Комиссия за вход',-m.feeIn$,`${num('feeIn')}% от ${money(m.N)}`)+
+    row('','#ff8f5c','Комиссия за выход',-m.feeOutT$)+
+    row('','#a78bfa','Проскальзывание',-m.slip$,`${num('slip')}% на входе и на выходе`)+
+    row('','#4a9eff',fLab,-m.fund$,`${num('hours')}ч от ${money(m.N)}`)+
+    row('f','','Реально на баланс',m.netP,'');
+  $('wf-loss').innerHTML=
+    row('h','','Убыток по плану',-m.grossL,`стоп ${(m.sp*100).toFixed(2)}% от объёма ${money(m.N)}`)+
+    row('','#ff5c5c','Комиссия за вход',-m.feeIn$)+
+    row('','#ff8f5c','Комиссия за выход',-m.feeOutS$)+
+    row('','#a78bfa','Проскальзывание',-m.slip$)+
+    row('','#4a9eff',fLab,-m.fund$)+
+    row('f','','Реально с баланса',-m.netL,'');
+}
+
+/* ── СИМУЛЯТОР ── */
+function sim(cap,riskPct,rr,n,runs){
+  const fin=[],dds=[];let ruin=0,zero=0;const paths=[];const win=num('sWin')/100;
+  for(let k=0;k<runs;k++){
+    let b=cap,peak=cap,dd=0;const p=[b];
+    for(let i=0;i<n;i++){
+      if(b<=cap*0.02){b=0;break}
+      const R=b*riskPct/100;
+      b+=(Math.random()<win?R*rr:-R); if(b<0)b=0;
+      peak=Math.max(peak,b); dd=Math.max(dd,(peak-b)/peak); p.push(b);
+      if(b===0)break;
+    }
+    fin.push(b);dds.push(dd);
+    if(b<cap*0.5)ruin++; if(b<=cap*0.02)zero++;
+    if(k<40)paths.push(p);
+  }
+  fin.sort((a,b)=>a-b);dds.sort((a,b)=>a-b);
+  return {med:fin[Math.floor(runs/2)],p5:fin[Math.floor(runs*0.05)],dd:dds[Math.floor(runs/2)],
+          ruin:ruin/runs,zero:zero/runs,paths,cap,n};
+}
+function draw(id,res,col){
+  const c=$(id),x=c.getContext('2d'),W=c.width,H=c.height;
+  x.clearRect(0,0,W,H);
+  const mx=Math.max(...res.paths.flat(),res.cap*1.2);
+  x.strokeStyle='#ffffff12';x.lineWidth=1;x.beginPath();
+  const y0=H-(res.cap/mx)*H;x.moveTo(0,y0);x.lineTo(W,y0);x.stroke();
+  res.paths.forEach(p=>{x.beginPath();x.strokeStyle=col+'55';x.lineWidth=1;
+    p.forEach((v,i)=>{const px=i/res.n*W,py=H-(v/mx)*H;i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();});
+}
+$('runsim').onclick=()=>{
+  const cap=num('sCap'),rr=num('sRR'),n=Math.max(1,Math.min(500,num('sN')));
+  const a=sim(cap,1,rr,n,2000),b=sim(cap,10,rr,n,2000);
+  const set=(p,r)=>{
+    $(p+'-med').innerHTML=money(r.med)+` <span style="font-size:14px;color:var(--tx3)">${r.med>=cap?'+':''}${((r.med/cap-1)*100).toFixed(0)}%</span>`;
+    $(p+'-p5').textContent=money(r.p5);
+    $(p+'-dd').textContent=(r.dd*100).toFixed(0)+'%';
+    $(p+'-ruin').innerHTML=`<span class="${r.ruin>0.2?'r':r.ruin>0.05?'a':'g'}">${(r.ruin*100).toFixed(0)}%</span>`;
+    $(p+'-zero').innerHTML=`<span class="${r.zero>0.1?'r':r.zero>0.01?'a':'g'}">${(r.zero*100).toFixed(0)}%</span>`;
+  };
+  set('r1',a);set('r10',b);draw('c1',a,'#00d395');draw('c10',b,'#ff5c5c');
+  $('sim-msg').innerHTML=`Винрейт ${num('sWin')}%, RR 1:${rr}, ${n} сделок — стратегия <b>одна и та же</b>. При риске 1% депозит слит в ноль в <b>${(a.zero*100).toFixed(0)}%</b> случаев, при риске 10% — в <b>${(b.zero*100).toFixed(0)}%</b>. Разница только в размере ставки.`;
+};
+
+/* телефон — главный ответ наверх, десктоп — обратно в правую колонку */
+function placeAnswer(){
+  const a=$('answer'),top=$('mtop'),col=$('rcol');
+  if(innerWidth<=900){ if(a.parentNode!==top) top.appendChild(a); }
+  else { if(a.parentNode!==col) col.prepend(a); }
+}
+addEventListener('resize',placeAnswer); placeAnswer();
+
+calc(); $('runsim').click();
+</script>
+</body>
+</html>
