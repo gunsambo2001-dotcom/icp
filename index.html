@@ -204,9 +204,9 @@ tbody tr:hover{background:#faf8ff}
   <div class="screen" id="scr-trainer">
     <div class="tool-head">
       <h2>📈 Тренажёр — размечай график</h2>
-      <a class="btn ghost sm" href="https://gunsambo2001-dotcom.github.io/crypto-trainer/" target="_blank" rel="noopener">Открыть на весь экран ↗</a>
+      <a class="btn ghost sm" id="trainerFullscreenBtn" href="#" rel="noopener">Открыть на весь экран ↗</a>
     </div>
-    <div class="frame"><iframe data-src="https://gunsambo2001-dotcom.github.io/crypto-trainer/" loading="lazy"></iframe></div>
+    <div class="frame"><iframe data-src="bridge" loading="lazy"></iframe></div>
     <p class="hint">Это практика к модулю 4: находи уровни поддержки и сопротивления, тренды и фигуры на настоящих графиках. Ошибаться здесь можно и нужно — это тренировка.</p>
   </div>
 
@@ -289,7 +289,7 @@ const TASKS=[
 ];
 
 /* ================== БАЗА: реальный API или локальная заглушка ================== */
-const API_URL='';                       // при выкате сюда — адрес Apps Script (как в дневнике)
+const API_URL='https://script.google.com/macros/s/AKfycbxV5e3F0SB1io48D3RiMauZKxGXg2_MJG02LhQZ82ZgzGk31T8h7F-tNY43r6aFAxZe/exec';
 const CURATOR_CODE='kurator-icp-2026';
 const STREAMS=['ПОТОК-7'];
 
@@ -344,9 +344,43 @@ function show(scr){
   document.querySelector('.shell').classList.toggle('wide',['trainer','calc','diary'].indexOf(scr)>=0);
   // ленивые iframes: грузим при первом открытии вкладки
   const sc=$('scr-'+scr), fr=sc&&sc.querySelector('iframe[data-src]');
-  if(fr){ fr.src=fr.dataset.src; fr.removeAttribute('data-src'); }
+  if(fr){
+    if(fr.dataset.src==='bridge') loadTrainer(fr);
+    else { fr.src=fr.dataset.src; fr.removeAttribute('data-src'); }
+  }
   window.scrollTo({top:0});
 }
+
+// Тренажёр (мост авторизации): без повторного логина — берём код потока и имя
+// из текущей сессии кабинета и меняем на одноразовый вход в тренажёр.
+// См. ТЗ_мост_авторизации_тренажёра.md.
+const TRAINER_URL='https://trading-trainer-erdem.netlify.app/';
+async function loadTrainer(fr){
+  fr.removeAttribute('data-src');
+  const frame=fr.parentElement;
+  try{
+    const r=await api('bridge',{stream:ME.stream,name:ME.name});
+    if(!r.ok){
+      frame.innerHTML = r.possible_duplicate
+        ? '<p class="hint">Похоже, ты уже регистрировался в тренажёре как «'+esc(r.existing_name)+'». Если это ты — обратись к куратору за восстановлением доступа. Если нет — проверь, что имя-фамилия введены верно на входе в кабинет.</p>'
+        : '<p class="hint">Не получилось открыть тренажёр: '+esc(r.error||'ошибка сервера')+'. Попробуй обновить страницу.</p>';
+      return;
+    }
+    console.log('[bridge] token issued, opening trainer', {stream:ME.stream,name:ME.name});
+    fr.src=TRAINER_URL+'#bridge_token='+encodeURIComponent(r.token_hash);
+  }catch(e){
+    console.error('[bridge] issue failed:', e);
+    frame.innerHTML='<p class="hint">Не получилось открыть тренажёр — проверь интернет-соединение и попробуй снова.</p>';
+  }
+}
+// "Открыть на весь экран" — токен одноразовый и уже потрачен на iframe выше,
+// поэтому для полноэкранного режима берём отдельный свежий токен по клику.
+$('trainerFullscreenBtn').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const r=await api('bridge',{stream:ME.stream,name:ME.name});
+  if(r.ok) window.open(TRAINER_URL+'#bridge_token='+encodeURIComponent(r.token_hash),'_blank','noopener');
+  else alert(r.possible_duplicate ? ('Похоже, ты уже регистрировался как «'+r.existing_name+'» — обратись к куратору.') : (r.error||'Не получилось открыть тренажёр.'));
+});
 document.querySelectorAll('.tabs button').forEach(b=>{
   b.onclick=()=>{ const s=b.dataset.scr; show(s);
     if(s==='hw') loadHw(); if(s==='curator') loadCurator(); };
