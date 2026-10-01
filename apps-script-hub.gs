@@ -16,6 +16,9 @@
 // Лист создаётся автоматически; чтобы создать его заранее — запустить setupMentors() в редакторе
 // (она же ставит выпадающие списки). Пустой code в mentors заполняется сам (onEdit / fillMentorCodes()).
 //
+// Аналитика: листы "an_students" и "an_modules" строит buildAnalytics(); раз в час её запускает триггер,
+// который ставится один раз вручную — запустить setupAnalyticsTrigger() в редакторе.
+//
 // Данные хранятся в Google Таблице, к которой привязан этот скрипт
 // (Расширения → Apps Script). Два листа создаются автоматически при первом вызове:
 // "students" и "answers" — те же поля, что раньше лежали в localStorage (apiMock).
@@ -98,6 +101,102 @@ function fillMentorCodes() {
 // Простой триггер: при правке листа mentors сам подставляет код в пустые строки.
 function onEdit(e) {
   if (e && e.range && e.range.getSheet().getName() === 'mentors') fillMentorCodes();
+}
+
+// ---------- Аналитика по домашке (листы an_students и an_modules, обновляются раз в час) ----------
+// Источник — только чтение answers и students. Листы an_* целиком перезаписываются одной записью.
+// Тест (type=test): считаем верные по correct. Открытый (type=open): status = pass / fail / pending.
+
+function isTrue(v) { return v === true || String(v).trim().toLowerCase() === 'true'; }
+
+function writeReport(name, headers, data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  sheet.clearContents();
+  const all = [headers].concat(data);
+  sheet.getRange(1, 1, all.length, headers.length).setValues(all);
+  sheet.setFrozenRows(1);
+}
+
+function pct(a, b) { return b ? Math.round(100 * a / b) + '%' : ''; }
+
+function buildAnalytics() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const tz = Session.getScriptTimeZone();
+    const sRows = studentsSheet().getDataRange().getValues();
+    const aRows = answersSheet().getDataRange().getValues();
+
+    // по ученику
+    const byStudent = {};
+    for (let i = 1; i < sRows.length; i++) {
+      const uid = String(sRows[i][0]);
+      if (!uid) continue;
+      byStudent[uid] = { stream: String(sRows[i][2]).trim().toUpperCase(), name: sRows[i][1],
+        tests: 0, testsOk: 0, open: 0, pass: 0, fail: 0, pending: 0, modules: {}, last: 0 };
+    }
+    // по потоку+модулю
+    const byModule = {};
+
+    for (let i = 1; i < aRows.length; i++) {
+      const r = aRows[i];
+      const uid = String(r[1]), stream = String(r[3]).trim().toUpperCase(), module = String(r[4]);
+      const type = String(r[7]), status = String(r[10]), ts = Number(r[12]) || 0;
+      const ok = isTrue(r[9]);
+      const st = byStudent[uid] || (byStudent[uid] = { stream: stream, name: r[2],
+        tests: 0, testsOk: 0, open: 0, pass: 0, fail: 0, pending: 0, modules: {}, last: 0 });
+      const key = stream + '|' + module;
+      const md = byModule[key] || (byModule[key] = { stream: stream, module: module, students: {},
+        tests: 0, testsOk: 0, open: 0, pass: 0, fail: 0, pending: 0 });
+
+      st.modules[module] = true;
+      md.students[uid] = true;
+      if (ts > st.last) st.last = ts;
+      if (type === 'test') {
+        st.tests++; md.tests++;
+        if (ok) { st.testsOk++; md.testsOk++; }
+      } else {
+        st.open++; md.open++;
+        if (status === 'pass') { st.pass++; md.pass++; }
+        else if (status === 'fail') { st.fail++; md.fail++; }
+        else { st.pending++; md.pending++; }
+      }
+    }
+
+    const studentRows = Object.keys(byStudent).map(function (uid) {
+      const s = byStudent[uid];
+      return [s.stream, s.name, uid, Object.keys(s.modules).length,
+        s.tests, s.testsOk, pct(s.testsOk, s.tests),
+        s.open, s.pass, s.fail, s.pending,
+        s.last ? Utilities.formatDate(new Date(s.last), tz, 'yyyy-MM-dd HH:mm') : ''];
+    }).sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])); });
+
+    const moduleRows = Object.keys(byModule).map(function (k) {
+      const m = byModule[k];
+      return [m.stream, m.module, Object.keys(m.students).length,
+        m.tests, m.testsOk, pct(m.testsOk, m.tests),
+        m.open, m.pass, m.fail, m.pending, pct(m.pass, m.open)];
+    }).sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])); });
+
+    writeReport('an_students',
+      ['поток', 'ученик', 'uid', 'модулей сдано', 'тестов', 'тестов верно', '% тестов',
+       'открытых', 'зачёт', 'на доработку', 'ждут проверки', 'последняя отправка'], studentRows);
+    writeReport('an_modules',
+      ['поток', 'модуль', 'учеников сдали', 'тестов', 'тестов верно', '% тестов',
+       'открытых', 'зачёт', 'на доработку', 'ждут проверки', '% зачёта открытых'], moduleRows);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Запустить один раз в редакторе: ставит обновление аналитики раз в час (старый триггер заменяется).
+function setupAnalyticsTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'buildAnalytics') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('buildAnalytics').timeBased().everyHours(1).create();
+  buildAnalytics();
 }
 
 function isOff(v) {
