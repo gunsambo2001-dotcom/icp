@@ -4,11 +4,16 @@
 // которого не виден отсюда для сверки.
 //
 // Настройка один раз, перед деплоем (Project Settings → Script Properties):
-//   CURATOR_CODE          = kurator-icp-2026   (тот же код, что сейчас в index.html)
 //   STREAMS               = ПОТОК-7            (нужен только один раз: из него создастся лист "streams";
 //                                                дальше потоки добавляются строками в листе "streams")
 //   TRAINER_BRIDGE_URL    = https://hisngabuakjdwoggkttb.supabase.co/functions/v1/trainer-bridge
 //   BRIDGE_SHARED_SECRET  = <длинная случайная строка, придумать один раз и запомнить>
+//                           (им же подписываются токены наставников — смена секрета разлогинит всех)
+//
+// Роли: лист "mentors" (id | name | code | role | active). role = owner или mentor.
+// Лист "streams", колонка mentor — id наставников потока через запятую (m1 или m1,m2).
+// Владелец видит все потоки, наставник — только свои. Права проверяются на каждом запросе.
+// Лист создаётся автоматически; чтобы создать его заранее — запустить setupMentors() в редакторе.
 //
 // Данные хранятся в Google Таблице, к которой привязан этот скрипт
 // (Расширения → Apps Script). Два листа создаются автоматически при первом вызове:
@@ -46,13 +51,75 @@ function streamsSheet() {
   return sheet;
 }
 
+function mentorsSheet() { return getSheet('mentors', ['id', 'name', 'code', 'role', 'active']); }
+function setupMentors() { mentorsSheet(); }
+
+function isOff(v) {
+  const a = String(v).trim().toLowerCase();
+  return a === 'нет' || a === 'no' || a === 'false' || a === '0';
+}
+
+function findMentorByCode(code) {
+  code = String(code || '').trim();
+  if (!code) return null;
+  const rows = mentorsSheet().getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][2]).trim() === code) return mentorFromRow(rows[i]);
+  }
+  return null;
+}
+
+function findMentorById(id) {
+  const rows = mentorsSheet().getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === id) return mentorFromRow(rows[i]);
+  }
+  return null;
+}
+
+function mentorFromRow(r) {
+  const role = String(r[3]).trim().toLowerCase() === 'owner' ? 'owner' : 'mentor';
+  return { id: String(r[0]).trim(), name: String(r[1]).trim(), role: role, active: !isOff(r[4]) };
+}
+
+// Токен: id.срок.подпись. Без состояния; активность наставника проверяется по листу при каждом запросе.
+const TOKEN_TTL_MS = 14 * 24 * 3600 * 1000;
+function signToken(id, exp) {
+  const sig = Utilities.computeHmacSha256Signature(id + '|' + exp, String(getProp('BRIDGE_SHARED_SECRET') || ''));
+  return Utilities.base64EncodeWebSafe(sig);
+}
+function issueToken(id) {
+  const exp = Date.now() + TOKEN_TTL_MS;
+  return id + '.' + exp + '.' + signToken(id, exp);
+}
+function authMentor(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 3) return null;
+  const id = parts[0], exp = Number(parts[1]);
+  if (!id || !exp || exp < Date.now()) return null;
+  if (signToken(id, exp) !== parts[2]) return null;
+  const m = findMentorById(id);
+  return m && m.active ? m : null;
+}
+
+// Потоки, доступные наставнику: [{code, name}]. Владелец — все.
+function streamsFor(m) {
+  const rows = streamsSheet().getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const code = String(rows[i][0]).trim().toUpperCase();
+    if (!code) continue;
+    const ids = String(rows[i][2]).split(',').map(function (x) { return x.trim(); });
+    if (m.role === 'owner' || ids.indexOf(m.id) >= 0) out.push({ code: code, name: rows[i][1] });
+  }
+  return out;
+}
+
 function findStream(code) {
   const rows = streamsSheet().getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]).trim().toUpperCase() === code) {
-      const a = String(rows[i][3]).trim().toLowerCase();
-      const off = a === 'нет' || a === 'no' || a === 'false' || a === '0';
-      return { code: code, name: rows[i][1], mentor: rows[i][2], active: !off };
+      return { code: code, name: rows[i][1], mentor: rows[i][2], active: !isOff(rows[i][3]) };
     }
   }
   return null;
@@ -86,21 +153,22 @@ function doPost(e) {
   if (action === 'login') return handleLogin(body);
   if (action === 'submit') return handleSubmit(body);
   if (action === 'my') return handleMy(body);
-  if (action === 'curator') return handleCurator();
+  if (action === 'curator') return handleCurator(body);
   if (action === 'grade') return handleGrade(body);
   if (action === 'bridge') return handleBridge(body);
   return jsonOut({ ok: false, error: 'unknown action' });
 }
 
 function handleLogin(p) {
+  const m = findMentorByCode(p.stream);
+  if (m) {
+    if (!m.active) return jsonOut({ ok: false, error: 'Доступ отключён. Напиши владельцу.' });
+    return jsonOut({ ok: true, role: m.role, name: m.name, token: issueToken(m.id) });
+  }
+
   const stream = String(p.stream || '').trim().toUpperCase();
   const name = String(p.name || '').trim();
   if (!stream || !name) return jsonOut({ ok: false, error: 'Заполни код потока и имя.' });
-
-  const curatorCode = getProp('CURATOR_CODE');
-  if (stream === String(curatorCode || '').toUpperCase()) {
-    return jsonOut({ ok: true, role: 'curator', name: name });
-  }
 
   const st = findStream(stream);
   if (!st) {
@@ -137,23 +205,34 @@ function handleMy(p) {
   return jsonOut({ ok: true, answers: answers });
 }
 
-function handleCurator() {
+function handleCurator(p) {
+  const m = authMentor(p.token);
+  if (!m) return jsonOut({ ok: false, error: 'auth' });
+  const streams = streamsFor(m);
+  const allowed = streams.map(function (x) { return x.code; });
+
   const sRows = studentsSheet().getDataRange().getValues();
   const sHeaders = sRows[0];
-  const students = sRows.slice(1).map(function (r) { return rowToObj(sHeaders, r); });
+  const students = sRows.slice(1).map(function (r) { return rowToObj(sHeaders, r); })
+    .filter(function (s) { return allowed.indexOf(String(s.stream).trim().toUpperCase()) >= 0; });
 
   const aRows = answersSheet().getDataRange().getValues();
   const aHeaders = aRows[0];
-  const answers = aRows.slice(1).map(function (r) { return rowToObj(aHeaders, r); });
+  const answers = aRows.slice(1).map(function (r) { return rowToObj(aHeaders, r); })
+    .filter(function (a) { return allowed.indexOf(String(a.stream).trim().toUpperCase()) >= 0; });
 
-  return jsonOut({ ok: true, students: students, answers: answers });
+  return jsonOut({ ok: true, role: m.role, streams: streams, students: students, answers: answers });
 }
 
 function handleGrade(p) {
+  const m = authMentor(p.token);
+  if (!m) return jsonOut({ ok: false, error: 'auth' });
+  const allowed = streamsFor(m).map(function (x) { return x.code; });
   const sheet = answersSheet();
   const rows = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === p.id) {
+      if (allowed.indexOf(String(rows[i][3]).trim().toUpperCase()) < 0) return jsonOut({ ok: false, error: 'forbidden' });
       sheet.getRange(i + 1, 11).setValue(p.status);              // status
       sheet.getRange(i + 1, 12).setValue(p.comment || '');       // comment
       sheet.getRange(i + 1, 10).setValue(p.status === 'pass');   // correct

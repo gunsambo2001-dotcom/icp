@@ -279,7 +279,6 @@ const TASKS=[
 
 /* ================== БАЗА: реальный API или локальная заглушка ================== */
 const API_URL='https://script.google.com/macros/s/AKfycbxV5e3F0SB1io48D3RiMauZKxGXg2_MJG02LhQZ82ZgzGk31T8h7F-tNY43r6aFAxZe/exec';
-const CURATOR_CODE='kurator-icp-2026';
 const STREAMS=['ПОТОК-7']; // только для локальной заглушки (когда API_URL пуст); реальные потоки — лист "streams" в таблице
 
 const LS='icp_hw';
@@ -290,7 +289,7 @@ function apiMock(action,p){
   if(action==='login'){
     const stream=(p.stream||'').trim().toUpperCase(), name=(p.name||'').trim();
     if(!stream||!name) return {ok:false,error:'Заполни код потока и имя.'};
-    if(stream===CURATOR_CODE.toUpperCase()) return {ok:true,role:'curator',name:name};
+    if(stream==='ДЕМО-КУРАТОР') return {ok:true,role:'owner',name:name,token:'demo'};
     if(STREAMS.indexOf(stream)<0) return {ok:false,error:'Такого потока нет. Проверь код — его давал куратор.'};
     let s=d.students.find(x=>x.stream===stream&&x.name.toLowerCase()===name.toLowerCase());
     if(!s){ s={uid:'u'+Date.now(),name,stream}; d.students.push(s); dbSave(d); }
@@ -304,7 +303,7 @@ function apiMock(action,p){
     dbSave(d); return {ok:true};
   }
   if(action==='my'){ return {ok:true,answers:db().answers.filter(a=>a.uid===p.uid)}; }
-  if(action==='curator'){ return {ok:true,students:d.students,answers:d.answers}; }
+  if(action==='curator'){ return {ok:true,role:'owner',streams:STREAMS.map(c=>({code:c,name:c})),students:d.students,answers:d.answers}; }
   if(action==='grade'){
     const a=d.answers.find(x=>x.id===p.id); if(a){ a.status=p.status; a.comment=p.comment||''; a.correct=p.status==='pass'; }
     dbSave(d); return {ok:true};
@@ -313,14 +312,18 @@ function apiMock(action,p){
 }
 async function api(action,p){
   if(!API_URL) return apiMock(action,p||{});
-  const r=await fetch(API_URL,{method:'POST',body:JSON.stringify({action,...p})});
-  return await r.json();
+  const r=await fetch(API_URL,{method:'POST',body:JSON.stringify({action,token:ME&&ME.token,...p})});
+  const j=await r.json();
+  if(j&&j.error==='auth'&&ME){ alert('Сессия истекла или доступ отключён. Войди заново.'); logout(); }
+  return j;
 }
 
 /* ================== СЕССИЯ И НАВИГАЦИЯ ================== */
 let ME=null;
 function saveSession(){ localStorage.setItem('icp_hw_me',JSON.stringify(ME)); }
-function loadSession(){ try{ME=JSON.parse(localStorage.getItem('icp_hw_me'))}catch(e){ME=null} }
+function loadSession(){ try{ME=JSON.parse(localStorage.getItem('icp_hw_me'))}catch(e){ME=null}
+  if(ME&&ME.role==='curator') ME=null; /* старая сессия без токена */ }
+function isStaff(){ return !!ME&&(ME.role==='owner'||ME.role==='mentor'); }
 function logout(){ ME=null; localStorage.removeItem('icp_hw_me'); location.reload(); }
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
 const $=id=>document.getElementById(id);
@@ -380,8 +383,8 @@ function boot(){
   $('tabs').style.display='flex';
   $('userChip').style.display='inline-block';
   $('btnOut').style.display='inline-block';
-  $('userChip').textContent = ME.role==='curator' ? 'Куратор · '+ME.name : ME.name+' · '+ME.stream;
-  if(ME.role==='curator'){
+  $('userChip').textContent = isStaff() ? (ME.role==='owner'?'Владелец · ':'Наставник · ')+ME.name : ME.name+' · '+ME.stream;
+  if(isStaff()){
     $('curTabBtn').style.display='flex';
     show('curator'); loadCurator();
   } else { show('hw'); loadHw(); }
@@ -483,9 +486,16 @@ async function submitModule(mid){
 }
 
 /* ================== КУРАТОР ================== */
+let curFilter='';
 async function loadCurator(){
   const r=await api('curator',{});
-  const studs=r.students||[], ans=r.answers||[];
+  if(!r.ok) return;
+  const streams=r.streams||[];
+  if(curFilter&&!streams.some(x=>x.code===curFilter)) curFilter='';
+  const studs=(r.students||[]).filter(s=>!curFilter||String(s.stream).trim().toUpperCase()===curFilter);
+  const sset=new Set(studs.map(s=>s.uid));
+  const ans=(r.answers||[]).filter(a=>sset.has(a.uid));
+  const filt=streams.length>1?`<div class="fld" style="max-width:280px;margin:0 0 16px"><label>Поток</label><select onchange="curFilter=this.value;loadCurator()"><option value="">Все потоки</option>${streams.map(x=>`<option value="${esc(x.code)}"${x.code===curFilter?' selected':''}>${esc(x.name||x.code)}</option>`).join('')}</select></div>`:'';
   let rows='';
   studs.forEach(s=>{
     const mine=ans.filter(a=>a.uid===s.uid);
@@ -499,7 +509,7 @@ async function loadCurator(){
       <td>${pend?'<span class="badge yy">'+pend+' ждут</span>':'—'}</td></tr>`;
   });
   const totPend=ans.filter(a=>a.status==='pending').length;
-  $('curBody').innerHTML=`
+  $('curBody').innerHTML=`${filt}
     <div class="stwrap">
       <div class="stat"><div class="l">Учеников</div><div class="v">${studs.length}</div></div>
       <div class="stat"><div class="l">Ответов всего</div><div class="v">${ans.length}</div></div>
@@ -510,6 +520,7 @@ async function loadCurator(){
 }
 async function openStudent(uid){
   const r=await api('curator',{});
+  if(!r.ok) return;
   const s=(r.students||[]).find(x=>x.uid===uid);
   const mine=(r.answers||[]).filter(a=>a.uid===uid);
   let out='';
