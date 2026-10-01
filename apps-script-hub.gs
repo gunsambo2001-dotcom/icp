@@ -191,10 +191,12 @@ function handleSubmit(p) {
   for (let i = rows.length - 1; i >= 1; i--) {
     if (rows[i][1] === uid && rows[i][4] === module) sheet.deleteRow(i + 1);
   }
-  items.forEach(function (it) {
-    sheet.appendRow(['a' + Date.now() + Math.round(Math.random() * 1000), uid, name, stream, module,
-      it.qid, it.q, it.type, it.answer, it.correct, it.status || '', '', Date.now()]);
+  // одной записью, а не appendRow на каждый ответ — иначе отправка теста тормозит
+  const newRows = items.map(function (it, k) {
+    return ['a' + Date.now() + k + Math.round(Math.random() * 1000), uid, name, stream, module,
+      it.qid, it.q, it.type, it.answer, it.correct, it.status || '', '', Date.now()];
   });
+  if (newRows.length) sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
   return jsonOut({ ok: true });
 }
 
