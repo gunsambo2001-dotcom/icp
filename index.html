@@ -163,7 +163,6 @@ tbody tr:hover{background:#faf8ff}
     <button data-scr="hw" class="act"><span class="ico">📝</span>Домашка</button>
     <button data-scr="trainer"><span class="ico">📈</span>Тренажёр графика</button>
     <button data-scr="calc"><span class="ico">🧮</span>Калькулятор риска</button>
-    <button data-scr="diary"><span class="ico">📓</span>Дневник сделок</button>
     <button data-scr="curator" id="curTabBtn" style="display:none"><span class="ico">👨‍🏫</span>Куратор</button>
   </div>
 
@@ -218,16 +217,6 @@ tbody tr:hover{background:#faf8ff}
     </div>
     <div class="frame"><iframe data-src="https://gunsambo2001-dotcom.github.io/icp/kalkulyator/" loading="lazy"></iframe></div>
     <p class="hint">Перед каждой сделкой: вводишь депозит, риск и уровни — калькулятор говорит, каким объёмом заходить. Правило из модуля 5: рискуем не больше 1–2% депозита.</p>
-  </div>
-
-  <!-- ДНЕВНИК -->
-  <div class="screen" id="scr-diary">
-    <div class="tool-head">
-      <h2>📓 Дневник сделок</h2>
-      <a class="btn ghost sm" href="https://gunsambo2001-dotcom.github.io/icp/dnevnik/" target="_blank" rel="noopener">Открыть на весь экран ↗</a>
-    </div>
-    <div class="frame"><iframe data-src="https://gunsambo2001-dotcom.github.io/icp/dnevnik/" loading="lazy"></iframe></div>
-    <p class="hint">Вход тот же: код потока и имя. Один раз войдёшь — дневник тебя запомнит. Каждую сделку записывай сюда: куратор видит их и разбирает с тобой.</p>
   </div>
 
   <!-- КУРАТОР -->
@@ -336,12 +325,12 @@ function logout(){ ME=null; localStorage.removeItem('icp_hw_me'); location.reloa
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
 const $=id=>document.getElementById(id);
 
-const SCREENS=['login','hw','mod','trainer','calc','diary','curator','curstud'];
+const SCREENS=['login','hw','mod','trainer','calc','curator','curstud'];
 function show(scr){
   SCREENS.forEach(s=>$('scr-'+s).classList.toggle('act',s===scr));
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('act',b.dataset.scr===scr));
   // для встроенных инструментов — широкий обзор почти на весь экран
-  document.querySelector('.shell').classList.toggle('wide',['trainer','calc','diary'].indexOf(scr)>=0);
+  document.querySelector('.shell').classList.toggle('wide',['trainer','calc'].indexOf(scr)>=0);
   // ленивые iframes: грузим при первом открытии вкладки
   const sc=$('scr-'+scr), fr=sc&&sc.querySelector('iframe[data-src]');
   if(fr){
