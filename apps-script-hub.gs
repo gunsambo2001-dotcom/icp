@@ -5,7 +5,8 @@
 //
 // Настройка один раз, перед деплоем (Project Settings → Script Properties):
 //   CURATOR_CODE          = kurator-icp-2026   (тот же код, что сейчас в index.html)
-//   STREAMS               = ПОТОК-7            (через запятую, если потоков станет больше)
+//   STREAMS               = ПОТОК-7            (нужен только один раз: из него создастся лист "streams";
+//                                                дальше потоки добавляются строками в листе "streams")
 //   TRAINER_BRIDGE_URL    = https://hisngabuakjdwoggkttb.supabase.co/functions/v1/trainer-bridge
 //   BRIDGE_SHARED_SECRET  = <длинная случайная строка, придумать один раз и запомнить>
 //
@@ -29,6 +30,33 @@ function getSheet(name, headers) {
 
 function studentsSheet() { return getSheet('students', ['uid', 'name', 'stream']); }
 function answersSheet()  { return getSheet('answers', ['id', 'uid', 'name', 'stream', 'module', 'qid', 'q', 'type', 'answer', 'correct', 'status', 'comment', 'ts']); }
+
+// Лист "streams" заполняют админ/наставник вручную: code | name | mentor | active.
+// При первом создании листа он заполняется из старой настройки STREAMS (чтобы ПОТОК-7 не пропал).
+function streamsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const existed = !!ss.getSheetByName('streams');
+  const sheet = getSheet('streams', ['code', 'name', 'mentor', 'active']);
+  if (!existed) {
+    String(getProp('STREAMS') || '').split(',').forEach(function (s) {
+      s = s.trim();
+      if (s) sheet.appendRow([s, s, '', 'да']);
+    });
+  }
+  return sheet;
+}
+
+function findStream(code) {
+  const rows = streamsSheet().getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim().toUpperCase() === code) {
+      const a = String(rows[i][3]).trim().toLowerCase();
+      const off = a === 'нет' || a === 'no' || a === 'false' || a === '0';
+      return { code: code, name: rows[i][1], mentor: rows[i][2], active: !off };
+    }
+  }
+  return null;
+}
 
 function findStudent(stream, name) {
   const rows = studentsSheet().getDataRange().getValues();
@@ -74,9 +102,12 @@ function handleLogin(p) {
     return jsonOut({ ok: true, role: 'curator', name: name });
   }
 
-  const streams = String(getProp('STREAMS') || '').split(',').map(function (s) { return s.trim().toUpperCase(); }).filter(Boolean);
-  if (streams.indexOf(stream) < 0) {
+  const st = findStream(stream);
+  if (!st) {
     return jsonOut({ ok: false, error: 'Такого потока нет. Проверь код — его давал куратор.' });
+  }
+  if (!st.active) {
+    return jsonOut({ ok: false, error: 'Этот поток закрыт. Напиши куратору.' });
   }
 
   let s = findStudent(stream, name);

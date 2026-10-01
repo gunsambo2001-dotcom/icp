@@ -280,7 +280,7 @@ const TASKS=[
 /* ================== БАЗА: реальный API или локальная заглушка ================== */
 const API_URL='https://script.google.com/macros/s/AKfycbxV5e3F0SB1io48D3RiMauZKxGXg2_MJG02LhQZ82ZgzGk31T8h7F-tNY43r6aFAxZe/exec';
 const CURATOR_CODE='kurator-icp-2026';
-const STREAMS=['ПОТОК-7'];
+const STREAMS=['ПОТОК-7']; // только для локальной заглушки (когда API_URL пуст); реальные потоки — лист "streams" в таблице
 
 const LS='icp_hw';
 function db(){ try{return JSON.parse(localStorage.getItem(LS))||{students:[],answers:[]}}catch(e){return{students:[],answers:[]}} }
