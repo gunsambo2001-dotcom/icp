@@ -13,7 +13,8 @@
 // Роли: лист "mentors" (id | name | code | role | active). role = owner или mentor.
 // Лист "streams", колонка mentor — id наставников потока через запятую (m1 или m1,m2).
 // Владелец видит все потоки, наставник — только свои. Права проверяются на каждом запросе.
-// Лист создаётся автоматически; чтобы создать его заранее — запустить setupMentors() в редакторе.
+// Лист создаётся автоматически; чтобы создать его заранее — запустить setupMentors() в редакторе
+// (она же ставит выпадающие списки). Пустой code в mentors заполняется сам (onEdit / fillMentorCodes()).
 //
 // Данные хранятся в Google Таблице, к которой привязан этот скрипт
 // (Расширения → Apps Script). Два листа создаются автоматически при первом вызове:
@@ -52,7 +53,52 @@ function streamsSheet() {
 }
 
 function mentorsSheet() { return getSheet('mentors', ['id', 'name', 'code', 'role', 'active']); }
-function setupMentors() { mentorsSheet(); }
+
+// Запустить один раз в редакторе: создаёт листы, ставит выпадающие списки
+// (mentors: role, active; streams: active, mentor) и заполняет пустые коды наставников.
+function setupMentors() {
+  const ms = mentorsSheet();
+  const ss = streamsSheet();
+  const rows = 1000;
+  const list = function (values) {
+    return SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(false).build();
+  };
+  ms.getRange(2, 4, rows, 1).setDataValidation(list(['owner', 'mentor']));
+  ms.getRange(2, 5, rows, 1).setDataValidation(list(['да', 'нет']));
+  ss.getRange(2, 4, rows, 1).setDataValidation(list(['да', 'нет']));
+  // mentor в streams: список id из mentors; допускается ввод "m1,m2" (для двух наставников),
+  // поэтому неподходящее значение только подсвечивается предупреждением, а не запрещается.
+  const mentorIds = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(ms.getRange('A2:A'), true)
+    .setAllowInvalid(true)
+    .build();
+  ss.getRange(2, 3, rows, 1).setDataValidation(mentorIds);
+  fillMentorCodes();
+}
+
+// Подставляет случайный код в строки mentors, где заполнены id и имя, а code пуст.
+// Заполненные коды не трогает; новый код не совпадает с существующими.
+function fillMentorCodes() {
+  const sheet = mentorsSheet();
+  const rows = sheet.getDataRange().getValues();
+  const used = {};
+  for (let i = 1; i < rows.length; i++) {
+    const c = String(rows[i][2]).trim();
+    if (c) used[c] = true;
+  }
+  for (let i = 1; i < rows.length; i++) {
+    if (!String(rows[i][0]).trim() || !String(rows[i][1]).trim() || String(rows[i][2]).trim()) continue;
+    let code;
+    do { code = Utilities.getUuid().replace(/-/g, '').slice(0, 10); } while (used[code]);
+    used[code] = true;
+    sheet.getRange(i + 1, 3).setValue(code);
+  }
+}
+
+// Простой триггер: при правке листа mentors сам подставляет код в пустые строки.
+function onEdit(e) {
+  if (e && e.range && e.range.getSheet().getName() === 'mentors') fillMentorCodes();
+}
 
 function isOff(v) {
   const a = String(v).trim().toLowerCase();
