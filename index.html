@@ -492,6 +492,7 @@ async function submitModule(mid){
 
 /* ================== КУРАТОР ================== */
 let curFilter='';
+const STALE_DAYS=7; // через сколько дней без отправок ученик подсвечивается на «Куратор»
 async function loadCurator(){
   const r=await api('curator',{});
   if(!r.ok) return;
@@ -501,18 +502,33 @@ async function loadCurator(){
   const sset=new Set(studs.map(s=>s.uid));
   const ans=(r.answers||[]).filter(a=>sset.has(a.uid));
   const filt=streams.length>1?`<div class="fld" style="max-width:280px;margin:0 0 16px"><label>Поток</label><select onchange="curFilter=this.value;loadCurator()"><option value="">Все потоки</option>${streams.map(x=>`<option value="${esc(x.code)}"${x.code===curFilter?' selected':''}>${esc(x.name||x.code)}</option>`).join('')}</select></div>`:'';
+  // сводка по списку ответов: тесты (всего/верно) и открытые (зачёт/доработка/ждут)
+  const cnt=list=>{
+    const t=list.filter(a=>a.type==='test'), o=list.filter(a=>a.type!=='test');
+    return {t:t.length, tok:t.filter(a=>a.correct===true).length, o:o.length,
+      pass:o.filter(a=>a.status==='pass').length, fail:o.filter(a=>a.status==='fail').length, pend:o.filter(a=>a.status==='pending').length};
+  };
+  const pc=(a,b)=>b?Math.round(100*a/b)+'%':'—';
+  const testCell=c=>c.t?`<span class="badge gg">${c.tok}</span> из ${c.t} · ${pc(c.tok,c.t)}`:'—';
+  const openCell=c=>c.o?`<span class="badge gg">${c.pass}</span> / <span class="badge rr">${c.fail}</span> / <span class="badge yy">${c.pend}</span>`:'—';
+  const now=Date.now();
   let rows='';
   studs.forEach(s=>{
     const mine=ans.filter(a=>a.uid===s.uid);
-    const ok=mine.filter(a=>a.correct===true).length;
-    const bad=mine.filter(a=>a.type==='test'&&a.correct===false).length;
-    const pend=mine.filter(a=>a.status==='pending').length;
+    const c=cnt(mine);
+    const last=Math.max(0,...mine.map(a=>Number(a.ts)||0));
+    const stale=!last||now-last>STALE_DAYS*864e5;
     const mods=new Set(mine.map(a=>a.module)).size;
-    rows+=`<tr onclick="openStudent('${s.uid}')">
-      <td><b>${esc(s.name)}</b></td><td>${esc(s.stream)}</td><td>${mods} из 6</td>
-      <td class="badge gg">${ok}</td><td class="badge rr">${bad||'—'}</td>
-      <td>${pend?'<span class="badge yy">'+pend+' ждут</span>':'—'}</td></tr>`;
+    rows+=`<tr onclick="openStudent('${s.uid}')"${stale?' style="background:#fff7e0"':''}>
+      <td><b>${esc(s.name)}</b></td><td>${esc(s.stream)}</td><td>${mods} из ${TASKS.length}</td>
+      <td>${testCell(c)}</td><td>${openCell(c)}</td>
+      <td>${last?new Date(last).toLocaleDateString('ru-RU')+(stale?' ⚠️':''):'не сдавал ⚠️'}</td></tr>`;
   });
+  const modRows=TASKS.map(m=>{
+    const list=ans.filter(a=>a.module===m.id); if(!list.length) return '';
+    const c=cnt(list), n=new Set(list.map(a=>a.uid)).size;
+    return `<tr><td>${m.ico} ${esc(m.title)}</td><td>${n} из ${studs.length}</td><td>${testCell(c)}</td><td>${openCell(c)}</td><td>${pc(c.pass,c.o)}</td></tr>`;
+  }).join('');
   const totPend=ans.filter(a=>a.status==='pending').length;
   $('curBody').innerHTML=`${filt}
     <div class="stwrap">
@@ -520,8 +536,11 @@ async function loadCurator(){
       <div class="stat"><div class="l">Ответов всего</div><div class="v">${ans.length}</div></div>
       <div class="stat"><div class="l">Ждут проверки</div><div class="v y">${totPend}</div></div>
     </div>
-    ${studs.length?`<table><thead><tr><th>Ученик</th><th>Поток</th><th>Модулей</th><th>Верно</th><th>Ошибок</th><th>На проверке</th></tr></thead><tbody>${rows}</tbody></table>`
-      :'<div class="card"><p class="sub">Пока никто из учеников не заходил.</p></div>'}`;
+    ${studs.length?`<table><thead><tr><th>Ученик</th><th>Поток</th><th>Модулей</th><th>Тесты</th><th>Открытые: зачёт / доработка / ждут</th><th>Последняя отправка</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="sub" style="margin-top:8px;font-size:13px">Жёлтым выделены ученики, которые не сдавали больше ${STALE_DAYS} дн. или ещё ничего не сдавали.</p>`
+      :'<div class="card"><p class="sub">Пока никто из учеников не заходил.</p></div>'}
+    ${modRows?`<h3 style="font-size:17px;margin:22px 0 10px">По модулям</h3>
+      <table><thead><tr><th>Модуль</th><th>Сдали</th><th>Тесты</th><th>Открытые: зачёт / доработка / ждут</th><th>% зачёта открытых</th></tr></thead><tbody>${modRows}</tbody></table>`:''}`;
 }
 async function openStudent(uid){
   const r=await api('curator',{});
