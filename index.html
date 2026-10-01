@@ -462,7 +462,9 @@ async function openModule(mid){
 }
 function pick(qid,oi,el){ ANS[qid]=oi; [...el.parentElement.querySelectorAll('.opt')].forEach(o=>o.classList.remove('sel')); el.classList.add('sel'); }
 
+let SUBMITTING=false;
 async function submitModule(mid){
+  if(SUBMITTING) return;
   const m=TASKS.find(x=>x.id===mid);
   const items=[];
   for(const q of m.qs){
@@ -476,7 +478,10 @@ async function submitModule(mid){
       items.push({qid:q.id,q:q.q,type:'open',answer:t,correct:null,status:'pending'});
     }
   }
-  await api('submit',{uid:ME.uid,name:ME.name,stream:ME.stream,module:mid,items});
+  SUBMITTING=true;
+  const sb=$('subBtn'); if(sb){ sb.disabled=true; sb.textContent='Отправляю…'; }
+  try{ await api('submit',{uid:ME.uid,name:ME.name,stream:ME.stream,module:mid,items}); }
+  finally{ SUBMITTING=false; }
   const ok=items.filter(x=>x.type==='test'&&x.correct).length;
   const tot=items.filter(x=>x.type==='test').length;
   const pend=items.filter(x=>x.type==='open').length;

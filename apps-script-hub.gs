@@ -184,6 +184,13 @@ function handleLogin(p) {
 }
 
 function handleSubmit(p) {
+  // отправки идут по очереди: параллельные «удалить старое + дописать новое» давали дубли строк
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { return submitLocked(p); } finally { lock.releaseLock(); }
+}
+
+function submitLocked(p) {
   const uid = p.uid, name = p.name, stream = p.stream, module = p.module, items = p.items || [];
   const sheet = answersSheet();
   const rows = sheet.getDataRange().getValues();
