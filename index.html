@@ -350,6 +350,13 @@ const TRAINER_URL='https://trading-trainer-erdem.netlify.app/';
 async function loadTrainer(fr){
   fr.removeAttribute('data-src');
   const frame=fr.parentElement;
+  // Владелец и наставник входят в тренажёр по своей почте, мост выдаёт только вход ученика
+  if(isStaff()){
+    $('trainerFullscreenBtn').href=TRAINER_URL;
+    $('trainerFullscreenBtn').target='_blank';
+    frame.innerHTML='<p class="hint">Ты вошёл как '+(ME.role==='owner'?'владелец':'наставник')+'. В тренажёр входи под своей почтой: <a href="'+TRAINER_URL+'" target="_blank" rel="noopener">открыть тренажёр ↗</a></p>';
+    return;
+  }
   try{
     const r=await api('bridge',{stream:ME.stream,name:ME.name});
     if(!r.ok){
@@ -368,6 +375,7 @@ async function loadTrainer(fr){
 // "Открыть на весь экран" — токен одноразовый и уже потрачен на iframe выше,
 // поэтому для полноэкранного режима берём отдельный свежий токен по клику.
 $('trainerFullscreenBtn').addEventListener('click', async (e)=>{
+  if(isStaff()) return; // у владельца/наставника это обычная ссылка на тренажёр (см. loadTrainer)
   e.preventDefault();
   const r=await api('bridge',{stream:ME.stream,name:ME.name});
   if(r.ok) window.open(TRAINER_URL+'#bridge_token='+encodeURIComponent(r.token_hash),'_blank','noopener');
