@@ -204,7 +204,7 @@ tbody tr:hover{background:var(--card2)}
       <h2>📈 Тренажёр — размечай график</h2>
       <a class="btn ghost sm" id="trainerFullscreenBtn" href="#" rel="noopener">Открыть на весь экран ↗</a>
     </div>
-    <div class="frame"><iframe data-src="bridge" loading="lazy"></iframe></div>
+    <div class="frame"><iframe data-src="bridge"></iframe></div>
     <p class="hint">Это практика к модулю 4: находи уровни поддержки и сопротивления, тренды и фигуры на настоящих графиках. Ошибаться здесь можно и нужно — это тренировка.</p>
   </div>
 
@@ -214,7 +214,7 @@ tbody tr:hover{background:var(--card2)}
       <h2>🧮 Калькулятор риск-менеджмента</h2>
       <a class="btn ghost sm" href="https://gunsambo2001-dotcom.github.io/icp/kalkulyator/" target="_blank" rel="noopener">Открыть на весь экран ↗</a>
     </div>
-    <div class="frame"><iframe data-src="https://gunsambo2001-dotcom.github.io/icp/kalkulyator/" loading="lazy"></iframe></div>
+    <div class="frame"><iframe data-src="https://gunsambo2001-dotcom.github.io/icp/kalkulyator/"></iframe></div>
     <p class="hint">Перед каждой сделкой: вводишь депозит, риск и уровни — калькулятор говорит, каким объёмом заходить. Правило из модуля 5: рискуем не больше 1–2% депозита.</p>
   </div>
 
@@ -394,7 +394,14 @@ function boot(){
   if(isStaff()){
     $('curTabBtn').style.display='flex';
     show('curator'); loadCurator();
-  } else { show('hw'); loadHw(); }
+  } else { show('hw'); loadHw(); setTimeout(preloadTools,600); }
+}
+// Пока ученик смотрит домашку — тренажёр и калькулятор уже грузятся в фоне
+function preloadTools(){
+  document.querySelectorAll('iframe[data-src]').forEach(fr=>{
+    if(fr.dataset.src==='bridge') loadTrainer(fr);
+    else { fr.src=fr.dataset.src; fr.removeAttribute('data-src'); }
+  });
 }
 async function doLogin(){
   const r=await api('login',{stream:$('inStream').value,name:$('inName').value});
@@ -403,9 +410,7 @@ async function doLogin(){
 }
 
 /* ================== УЧЕНИК: ДОМАШКА ================== */
-async function loadHw(){
-  const r=await api('my',{uid:ME.uid});
-  const mine=r.answers||[];
+function renderHw(mine,loading){
   const byMod={}; mine.forEach(a=>{ (byMod[a.module]=byMod[a.module]||[]).push(a); });
   let rows='';
   TASKS.forEach(m=>{
@@ -414,7 +419,7 @@ async function loadHw(){
     const pend=done.filter(a=>a.status==='pending').length;
     const fail=done.filter(a=>a.status==='fail').length;
     const pct=Math.round(answered/total*100);
-    let status='<span>не начат — нажми, чтобы открыть</span>';
+    let status=loading?'<span>загружаю…</span>':'<span>не начат — нажми, чтобы открыть</span>';
     if(answered>0){
       status = pend>0 ? '<span class="y">⏳ куратор проверяет развёрнутый ответ</span>'
         : fail>0 ? '<span class="r">✍️ есть ответ на доработку — открой и посмотри комментарий</span>'
@@ -428,6 +433,15 @@ async function loadHw(){
       <div class="arr">${answered}/${total} →</div></div>`;
   });
   $('hwList').innerHTML=rows;
+}
+async function loadHw(){
+  const ck='icp_hw_cache_'+ME.uid; let cached=null;
+  try{cached=JSON.parse(localStorage.getItem(ck))}catch(e){}
+  renderHw(cached||[],!cached); // сразу показываем список, не ждём Google
+  const r=await api('my',{uid:ME.uid});
+  const mine=r.answers||[];
+  try{localStorage.setItem(ck,JSON.stringify(mine))}catch(e){}
+  renderHw(mine,false);
 }
 
 let CUR=null, ANS={};
