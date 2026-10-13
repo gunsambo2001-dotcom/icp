@@ -6,6 +6,8 @@ import { SupabaseStore } from '../store/supabase-store.js';
 import { MentorStore } from '../store/mentor-store.js';
 import { startApp } from './app.js';
 import { renderAuthScreen, renderPasswordRecoveryScreen } from './auth.js';
+import { FEATURES } from '../features.js';
+import { parseBridgeToken, bridgeSignIn, renderBridgeLoading, renderBridgeFailed } from './bridge.js';
 
 // Ссылка из письма «Забыли пароль?» приходит как #...&type=recovery. Supabase сам создаёт по ней
 // сессию, поэтому без этой проверки человек молча оказался бы внутри без установки нового пароля.
@@ -15,8 +17,19 @@ supabase.auth.onAuthStateChange((event) => {
   if (event === 'PASSWORD_RECOVERY') isRecovery = true;
 });
 
+// Вход с сайта Гунсамбо: токен из hash сразу убираем из адреса, затем меняем на сессию.
+const bridgeToken = parseBridgeToken(location.hash);
+let bridgeFailed = false;
+if (bridgeToken !== null) {
+  history.replaceState(null, '', location.pathname + location.search);
+  renderBridgeLoading();
+  bridgeFailed = !(await bridgeSignIn(supabase, bridgeToken)).ok;
+}
+
 const { data: { session } } = await supabase.auth.getSession();
-if (isRecovery && session) {
+if (bridgeFailed) {
+  renderBridgeFailed({ onRetry: () => location.reload() });
+} else if (isRecovery && session) {
   renderPasswordRecoveryScreen(supabase, {
     onDone: () => {
       history.replaceState(null, '', location.pathname);
@@ -31,6 +44,12 @@ if (isRecovery && session) {
     onAuthenticated: () => location.reload(),
     initialMode: 'forgot',
     initialError: 'Ссылка устарела или уже использована. Запросите новую.',
+  });
+} else if (!FEATURES.emailLogin) {
+  // Сборка для Гунсамбо: входа по email нет, зайти можно только через кабинет.
+  renderBridgeFailed({
+    onRetry: () => location.reload(),
+    message: 'Откройте дневник из кабинета Гунсамбо — вкладка «Дневник».',
   });
 } else {
   renderAuthScreen(supabase, { onAuthenticated: () => location.reload() });

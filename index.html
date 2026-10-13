@@ -160,8 +160,10 @@ tbody tr:hover{background:var(--card2)}
 <div class="shell">
   <div class="tabs" id="tabs">
     <button data-scr="hw" class="act"><span class="ico">📝</span>Домашка</button>
-    <button data-scr="trainer"><span class="ico">📈</span>Тренажёр графика</button>
+    <button data-scr="chart"><span class="ico">📈</span>Тренажёр графика</button>
+    <button data-scr="trainer"><span class="ico">🎮</span>Симулятор рынка</button>
     <button data-scr="calc"><span class="ico">🧮</span>Калькулятор риска</button>
+    <button data-scr="diary"><span class="ico">📓</span>Дневник</button>
     <button data-scr="curator" id="curTabBtn" style="display:none"><span class="ico">👨‍🏫</span>Куратор</button>
   </div>
 
@@ -177,6 +179,7 @@ tbody tr:hover{background:var(--card2)}
       <div class="what">
         <div class="w"><b>📝 Домашка</b><span>Задания после каждого модуля. Тесты проверяются сразу, развёрнутые ответы смотрит куратор.</span></div>
         <div class="w"><b>📈 Тренажёр графика</b><span>Учись видеть уровни и фигуры на реальных графиках — как на уроках модуля 4.</span></div>
+        <div class="w"><b>🎮 Симулятор рынка</b><span>Торгуй на исторических графиках как в реальном времени: входи, ставь стоп и тренируйся без риска.</span></div>
         <div class="w"><b>🧮 Калькулятор риска</b><span>Считает, каким объёмом заходить в сделку, чтобы не потерять больше плана.</span></div>
         <div class="w"><b>👨‍🏫 Обратная связь</b><span>Куратор проверяет развёрнутые ответы и оставляет комментарии — ты видишь, что поправить.</span></div>
       </div>
@@ -198,10 +201,20 @@ tbody tr:hover{background:var(--card2)}
     <div id="modBody"></div>
   </div>
 
-  <!-- ТРЕНАЖЁР -->
+  <!-- ТРЕНАЖЁР ГРАФИКА (паттерны) -->
+  <div class="screen" id="scr-chart">
+    <div class="tool-head">
+      <h2>📈 Тренажёр графика — учись видеть паттерны</h2>
+      <a class="btn ghost sm" href="https://gunsambo2001-dotcom.github.io/crypto-trainer/" target="_blank" rel="noopener">Открыть на весь экран ↗</a>
+    </div>
+    <div class="frame"><iframe data-src="https://gunsambo2001-dotcom.github.io/crypto-trainer/"></iframe></div>
+    <p class="hint">Разные паттерны на реальных графиках: находи фигуры и проверяй себя. Практика к модулю 4.</p>
+  </div>
+
+  <!-- СИМУЛЯТОР РЫНКА -->
   <div class="screen" id="scr-trainer">
     <div class="tool-head">
-      <h2>📈 Тренажёр — размечай график</h2>
+      <h2>🎮 Симулятор рынка — торгуй на истории</h2>
       <a class="btn ghost sm" id="trainerFullscreenBtn" href="#" rel="noopener">Открыть на весь экран ↗</a>
     </div>
     <div class="frame"><iframe data-src="bridge"></iframe></div>
@@ -216,6 +229,16 @@ tbody tr:hover{background:var(--card2)}
     </div>
     <div class="frame"><iframe data-src="https://gunsambo2001-dotcom.github.io/icp/kalkulyator/"></iframe></div>
     <p class="hint">Перед каждой сделкой: вводишь депозит, риск и уровни — калькулятор говорит, каким объёмом заходить. Правило из модуля 5: рискуем не больше 1–2% депозита.</p>
+  </div>
+
+  <!-- ДНЕВНИК СДЕЛОК (R-Дневник, версия без калькулятора) -->
+  <div class="screen" id="scr-diary">
+    <div class="tool-head">
+      <h2>📓 Дневник сделок — анализируй свою торговлю</h2>
+      <a class="btn ghost sm" id="diaryFullscreenBtn" href="dnevnik/" target="_blank" rel="noopener">Открыть на весь экран ↗</a>
+    </div>
+    <div class="frame"><iframe data-src="diary-bridge"></iframe></div>
+    <p class="hint">Записывай каждую сделку: вход, стоп, цели и результат в R. Размер позиции считай в калькуляторе риска и вводи сюда. Отдельная регистрация не нужна — ты уже вошёл по коду потока и имени.</p>
   </div>
 
   <!-- КУРАТОР -->
@@ -327,18 +350,15 @@ function logout(){ ME=null; localStorage.removeItem('icp_hw_me'); location.reloa
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
 const $=id=>document.getElementById(id);
 
-const SCREENS=['login','hw','mod','trainer','calc','curator','curstud'];
+const SCREENS=['login','hw','mod','chart','trainer','calc','diary','curator','curstud'];
 function show(scr){
   SCREENS.forEach(s=>$('scr-'+s).classList.toggle('act',s===scr));
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('act',b.dataset.scr===scr));
   // для встроенных инструментов — широкий обзор почти на весь экран
-  document.querySelector('.shell').classList.toggle('wide',['trainer','calc'].indexOf(scr)>=0);
+  document.querySelector('.shell').classList.toggle('wide',['chart','trainer','calc','diary'].indexOf(scr)>=0);
   // ленивые iframes: грузим при первом открытии вкладки
   const sc=$('scr-'+scr), fr=sc&&sc.querySelector('iframe[data-src]');
-  if(fr){
-    if(fr.dataset.src==='bridge') loadTrainer(fr);
-    else { fr.src=fr.dataset.src; fr.removeAttribute('data-src'); }
-  }
+  if(fr) loadFrame(fr);
   window.scrollTo({top:0});
 }
 
@@ -380,6 +400,50 @@ $('trainerFullscreenBtn').addEventListener('click', async (e)=>{
   if(r.ok) window.open(TRAINER_URL+'#bridge_token='+encodeURIComponent(r.token_hash),'_blank','noopener');
   else alert(r.possible_duplicate ? ('Похоже, ты уже регистрировался как «'+r.existing_name+'» — обратись к куратору.') : (r.error||'Не получилось открыть тренажёр.'));
 });
+
+// Дневник (мост авторизации): тот же приём, что у тренажёра. Дневник лежит рядом (dnevnik/),
+// токен передаётся в hash. Владелец/наставник входят в дневник на Netlify-версии по email.
+const DIARY_URL=new URL('dnevnik/',location.href).href;
+const DIARY_STAFF_URL='https://clever-biscotti-65da3a.netlify.app/';
+function diaryDuplicateMsg(r){
+  return 'Похоже, ты уже регистрировался в дневнике как «'+esc(r.existing_name)+'». Если это ты — обратись к куратору за восстановлением доступа. Если нет — проверь, что имя-фамилия введены верно на входе в кабинет.';
+}
+async function loadDiary(fr){
+  fr.removeAttribute('data-src');
+  const frame=fr.parentElement;
+  if(isStaff()){
+    $('diaryFullscreenBtn').href=DIARY_STAFF_URL;
+    frame.innerHTML='<p class="hint">Ты вошёл как '+(ME.role==='owner'?'владелец':'наставник')+'. В дневник входи под своей почтой: <a href="'+DIARY_STAFF_URL+'" target="_blank" rel="noopener">открыть дневник ↗</a></p>';
+    return;
+  }
+  try{
+    const r=await api('diary_bridge',{stream:ME.stream,name:ME.name});
+    if(!r.ok){
+      frame.innerHTML = r.possible_duplicate
+        ? '<p class="hint">'+diaryDuplicateMsg(r)+'</p>'
+        : '<p class="hint">Не получилось открыть дневник: '+esc(r.error||'ошибка сервера')+'. Попробуй обновить страницу.</p>';
+      return;
+    }
+    fr.src=DIARY_URL+'#bridge_token='+encodeURIComponent(r.token_hash);
+  }catch(e){
+    console.error('[diary_bridge] issue failed:', e);
+    frame.innerHTML='<p class="hint">Не получилось открыть дневник — проверь интернет-соединение и попробуй снова.</p>';
+  }
+}
+// "На весь экран": токен одноразовый и уже потрачен на iframe — берём свежий по клику.
+$('diaryFullscreenBtn').addEventListener('click', async (e)=>{
+  if(isStaff()) return;
+  e.preventDefault();
+  const r=await api('diary_bridge',{stream:ME.stream,name:ME.name});
+  if(r.ok) window.open(DIARY_URL+'#bridge_token='+encodeURIComponent(r.token_hash),'_blank','noopener');
+  else alert(r.possible_duplicate ? ('Похоже, ты уже регистрировался как «'+r.existing_name+'» — обратись к куратору.') : (r.error||'Не получилось открыть дневник.'));
+});
+function loadFrame(fr){
+  const s=fr.dataset.src;
+  if(s==='bridge') loadTrainer(fr);
+  else if(s==='diary-bridge') loadDiary(fr);
+  else { fr.src=s; fr.removeAttribute('data-src'); }
+}
 document.querySelectorAll('.tabs button').forEach(b=>{
   b.onclick=()=>{ const s=b.dataset.scr; show(s);
     if(s==='hw') loadHw(); if(s==='curator') loadCurator(); };
@@ -398,10 +462,7 @@ function boot(){
 }
 // Пока ученик смотрит домашку — тренажёр и калькулятор уже грузятся в фоне
 function preloadTools(){
-  document.querySelectorAll('iframe[data-src]').forEach(fr=>{
-    if(fr.dataset.src==='bridge') loadTrainer(fr);
-    else { fr.src=fr.dataset.src; fr.removeAttribute('data-src'); }
-  });
+  document.querySelectorAll('iframe[data-src]').forEach(loadFrame);
 }
 async function doLogin(){
   const r=await api('login',{stream:$('inStream').value,name:$('inName').value});

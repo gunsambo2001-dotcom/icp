@@ -9,6 +9,8 @@
 //   TRAINER_BRIDGE_URL    = https://hisngabuakjdwoggkttb.supabase.co/functions/v1/trainer-bridge
 //   BRIDGE_SHARED_SECRET  = <длинная случайная строка, придумать один раз и запомнить>
 //                           (им же подписываются токены наставников — смена секрета разлогинит всех)
+//   DIARY_BRIDGE_URL      = https://zmkbkmjxyqokyzmkqdrg.supabase.co/functions/v1/diary-bridge
+//   DIARY_BRIDGE_SECRET   = <тот же, что секрет DIARY_BRIDGE_SECRET в Supabase → Edge Functions → Secrets>
 //
 // Роли: лист "mentors" (id | name | code | role | active). role = owner или mentor.
 // Лист "streams", колонка mentor — id наставников потока через запятую (m1 или m1,m2).
@@ -301,6 +303,7 @@ function doPost(e) {
   if (action === 'curator') return handleCurator(body);
   if (action === 'grade') return handleGrade(body);
   if (action === 'bridge') return handleBridge(body);
+  if (action === 'diary_bridge') return handleDiaryBridge(body);
   return jsonOut({ ok: false, error: 'unknown action' });
 }
 
@@ -417,5 +420,25 @@ function handleBridge(p) {
     muteHttpExceptions: true,
   });
   const data = JSON.parse(resp.getContentText());
+  return jsonOut(data);
+}
+
+// Мост в дневник (R-Дневник): та же схема, но свой секрет и своя Edge Function.
+function handleDiaryBridge(p) {
+  const stream = String(p.stream || '').trim().toUpperCase();
+  const name = String(p.name || '').trim();
+  if (!stream || !name) return jsonOut({ ok: false, error: 'stream and name required' });
+
+  const url = getProp('DIARY_BRIDGE_URL');
+  const secret = getProp('DIARY_BRIDGE_SECRET');
+  if (!url || !secret) return jsonOut({ ok: false, error: 'diary bridge not configured' });
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ action: 'issue', secret: secret, stream: stream, name: name }),
+    muteHttpExceptions: true,
+  });
+  let data;
+  try { data = JSON.parse(resp.getContentText()); } catch (err) { data = { ok: false, error: 'bad response from diary bridge' }; }
   return jsonOut(data);
 }
