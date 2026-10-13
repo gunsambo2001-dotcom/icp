@@ -15,7 +15,7 @@ export function parseBridgeToken(hash) {
  * email для verifyOtp с token_hash передавать нельзя.
  * @returns {Promise<{ ok: boolean, error?: string }>}
  */
-export async function bridgeSignIn(client, tokenHash, { timeoutMs = 20000 } = {}) {
+export async function bridgeSignIn(client, tokenHash, { timeoutMs = 45000 } = {}) {
   if (!tokenHash) return { ok: false, error: 'empty_token' };
   // Без таймаута зависший сетевой вызов оставлял «Входим…» навсегда.
   const withTimeout = (p, step) => Promise.race([
@@ -53,7 +53,7 @@ function card(children) {
 
 /** Экран «входим…» — пока идёт обмен токена, формы логина нет. */
 export function renderBridgeLoading() {
-  card([h('p', { id: 'bridge-loading', text: 'Входим в дневник…', style: 'color:var(--ink-2);margin:0;font-size:13px;' })]);
+  card([h('p', { id: 'bridge-loading', text: 'Входим в дневник…', style: 'color:var(--ink-2);margin:0;font-size:13px;' }), h('p', { text: 'Первый вход может занять до минуты, не закрывайте страницу.', style: 'color:var(--ink-2);margin:8px 0 0;font-size:12px;' })]);
 }
 
 /** Токен просрочен/использован или в сборке нет входа по email и сессии нет. */
