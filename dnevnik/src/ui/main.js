@@ -20,15 +20,25 @@ supabase.auth.onAuthStateChange((event) => {
 // Вход с сайта Гунсамбо: токен из hash сразу убираем из адреса, затем меняем на сессию.
 const bridgeToken = parseBridgeToken(location.hash);
 let bridgeFailed = false;
+let bridgeError = '';
 if (bridgeToken !== null) {
   history.replaceState(null, '', location.pathname + location.search);
   renderBridgeLoading();
-  bridgeFailed = !(await bridgeSignIn(supabase, bridgeToken)).ok;
+  const bridgeRes = await bridgeSignIn(supabase, bridgeToken);
+  bridgeFailed = !bridgeRes.ok;
+  bridgeError = bridgeRes.error || '';
+  if (bridgeFailed) console.error('[bridge] sign-in failed:', bridgeError);
+  else {
+    // Экран «Входим…» заменил каркас приложения, поэтому, как после обычного входа (auth.js), перезагружаем
+    // страницу: токена в адресе уже нет, сессия есть — дневник стартует с чистого каркаса.
+    location.reload();
+    await new Promise(() => {});
+  }
 }
 
 const { data: { session } } = await supabase.auth.getSession();
 if (bridgeFailed) {
-  renderBridgeFailed({ onRetry: () => location.reload() });
+  renderBridgeFailed({ onRetry: () => location.reload(), detail: bridgeError });
 } else if (isRecovery && session) {
   renderPasswordRecoveryScreen(supabase, {
     onDone: () => {

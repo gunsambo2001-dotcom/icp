@@ -462,7 +462,8 @@ function boot(){
 }
 // Пока ученик смотрит домашку — тренажёр и калькулятор уже грузятся в фоне
 function preloadTools(){
-  document.querySelectorAll('iframe[data-src]').forEach(loadFrame);
+  // Дневник в фоне не грузим: скрытая рамка не отрисовывается, а токен входа одноразовый — открываем по клику на вкладку.
+  document.querySelectorAll('iframe[data-src]').forEach(fr=>{ if(fr.dataset.src!=='diary-bridge') loadFrame(fr); });
 }
 async function doLogin(){
   const r=await api('login',{stream:$('inStream').value,name:$('inName').value});
