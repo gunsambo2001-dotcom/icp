@@ -6,9 +6,9 @@ import { h, mount } from './dom.js';
 
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} client
- * @param {{ onAuthenticated: () => void, initialError?: string, initialMode?: 'signin'|'signup'|'forgot' }} opts
+ * @param {{ onAuthenticated: () => void, initialError?: string, initialMode?: 'signin'|'signup'|'forgot', allowSignup?: boolean }} opts
  */
-export function renderAuthScreen(client, { onAuthenticated, initialError = '', initialMode = 'signin' }) {
+export function renderAuthScreen(client, { onAuthenticated, initialError = '', initialMode = 'signin', allowSignup = true }) {
   const $app = document.getElementById('app');
   $app.removeAttribute('data-loading');
   $app.className = 'auth-screen';
@@ -57,7 +57,7 @@ export function renderAuthScreen(client, { onAuthenticated, initialError = '', i
             busy ? 'Подождите…' : isForgot ? 'Отправить ссылку' : isSignin ? 'Войти' : 'Зарегистрироваться',
           ]),
         ]),
-        h('button.btn.btn-ghost', { onclick: toggleMode, style: 'margin-top:12px;width:100%;' }, [
+        !allowSignup && isSignin ? null : h('button.btn.btn-ghost', { onclick: toggleMode, style: 'margin-top:12px;width:100%;' }, [
           isForgot ? 'Вернуться ко входу' : isSignin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти',
         ]),
       ]),

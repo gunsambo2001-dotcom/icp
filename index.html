@@ -405,7 +405,6 @@ $('trainerFullscreenBtn').addEventListener('click', async (e)=>{
 // Дневник (мост авторизации): тот же приём, что у тренажёра. Дневник лежит рядом (dnevnik/),
 // токен передаётся в hash. Владелец/наставник входят в дневник на Netlify-версии по email.
 const DIARY_URL=new URL('dnevnik/',location.href).href;
-const DIARY_STAFF_URL='https://clever-biscotti-65da3a.netlify.app/';
 function diaryDuplicateMsg(r){
   return 'Похоже, ты уже регистрировался в дневнике как «'+esc(r.existing_name)+'». Если это ты — обратись к куратору за восстановлением доступа. Если нет — проверь, что имя-фамилия введены верно на входе в кабинет.';
 }
@@ -413,8 +412,9 @@ async function loadDiary(fr){
   fr.removeAttribute('data-src');
   const frame=fr.parentElement;
   if(isStaff()){
-    $('diaryFullscreenBtn').href=DIARY_STAFF_URL;
-    frame.innerHTML='<p class="hint">Ты вошёл как '+(ME.role==='owner'?'владелец':'наставник')+'. В дневник входи под своей почтой: <a href="'+DIARY_STAFF_URL+'" target="_blank" rel="noopener">открыть дневник ↗</a></p>';
+    // Владелец/наставник: тот же дневник во вкладке, вход по почте (#staff включает форму входа без регистрации).
+    $('diaryFullscreenBtn').href=DIARY_URL+'#staff';
+    fr.src=DIARY_URL+'#staff';
     return;
   }
   try{

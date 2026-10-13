@@ -12,7 +12,9 @@ import { parseBridgeToken, bridgeSignIn, renderBridgeLoading, renderBridgeFailed
 // Ссылка из письма «Забыли пароль?» приходит как #...&type=recovery. Supabase сам создаёт по ней
 // сессию, поэтому без этой проверки человек молча оказался бы внутри без установки нового пароля.
 let isRecovery = /[#&]type=recovery/.test(location.hash);
-const linkFailed = /[#&](error_code=otp_expired|error=access_denied)/.test(location.hash);
+// Кабинет Гунсамбо открывает дневник для владельца/наставника с #staff — показываем вход по почте.
+const staffEntry = location.hash === '#staff';
+const linkFailed =/[#&](error_code=otp_expired|error=access_denied)/.test(location.hash);
 supabase.auth.onAuthStateChange((event) => {
   if (event === 'PASSWORD_RECOVERY') isRecovery = true;
 });
@@ -55,14 +57,15 @@ if (bridgeFailed) {
     initialMode: 'forgot',
     initialError: 'Ссылка устарела или уже использована. Запросите новую.',
   });
-} else if (!FEATURES.emailLogin) {
+} else if (!FEATURES.emailLogin && !staffEntry) {
   // Сборка для Гунсамбо: входа по email нет, зайти можно только через кабинет.
   renderBridgeFailed({
     onRetry: () => location.reload(),
     message: 'Откройте дневник из кабинета Гунсамбо — вкладка «Дневник».',
   });
 } else {
-  renderAuthScreen(supabase, { onAuthenticated: () => location.reload() });
+  // staffEntry в сборке без emailLogin — вход наставника/админа по почте, без регистрации.
+  renderAuthScreen(supabase, { onAuthenticated: () => location.reload(), allowSignup: FEATURES.emailLogin });
 }
 
 async function boot() {
