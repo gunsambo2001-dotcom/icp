@@ -442,3 +442,74 @@ function handleDiaryBridge(p) {
   try { data = JSON.parse(resp.getContentText()); } catch (err) { data = { ok: false, error: 'bad response from diary bridge' }; }
   return jsonOut(data);
 }
+
+// ── Удаление учеников сразу везде ───────────────────────────────────────────
+// Меню "Кабинет → Удалить выбранных учеников": выделить строки на листе "students"
+// и нажать пункт меню. Ученик удаляется в дневнике и в тренажёре (по потоку и имени),
+// затем строка убирается из таблицы. Если в одной из баз удаление не удалось,
+// строка остаётся — повторите после исправления. Листы answers / an_students не трогаются.
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Кабинет')
+    .addItem('Удалить выбранных учеников', 'deleteSelectedStudents')
+    .addToUi();
+}
+
+function callDeleteBridge(urlProp, secretProp, stream, name) {
+  const url = getProp(urlProp);
+  const secret = getProp(secretProp);
+  if (!url || !secret) return { ok: false, error: urlProp + ' не настроен' };
+  try {
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ action: 'delete', secret: secret, stream: stream, name: name }),
+      muteHttpExceptions: true,
+    });
+    return JSON.parse(resp.getContentText());
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+function deleteSelectedStudents() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getName() !== 'students') {
+    ui.alert('Откройте лист "students" и выделите строки учеников.');
+    return;
+  }
+  const range = sheet.getActiveRange();
+  const first = Math.max(range.getRow(), 2);   // строку 1 (заголовки) не трогаем
+  const last = range.getLastRow();
+  if (last < first) { ui.alert('Выделите строки учеников (не заголовок).'); return; }
+
+  const rows = sheet.getRange(first, 1, last - first + 1, 3).getValues();
+  const list = [];
+  rows.forEach(function (r, i) {
+    const name = String(r[1] || '').trim();
+    const stream = String(r[2] || '').trim().toUpperCase();
+    if (name && stream) list.push({ row: first + i, name: name, stream: stream });
+  });
+  if (!list.length) { ui.alert('В выделенных строках нет учеников.'); return; }
+
+  const names = list.map(function (s) { return s.name + ' (' + s.stream + ')'; }).join('\n');
+  const answer = ui.alert(
+    'Удалить ' + list.length + ' учеников из дневника, тренажёра и таблицы?\nЭто необратимо.',
+    names, ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+
+  const failed = [];
+  const removeRows = [];
+  list.forEach(function (s) {
+    const d = callDeleteBridge('DIARY_BRIDGE_URL', 'DIARY_BRIDGE_SECRET', s.stream, s.name);
+    const t = callDeleteBridge('TRAINER_BRIDGE_URL', 'BRIDGE_SHARED_SECRET', s.stream, s.name);
+    if (d.ok && t.ok) removeRows.push(s.row);
+    else failed.push(s.name + ': дневник — ' + (d.ok ? 'ок' : d.error) + '; тренажёр — ' + (t.ok ? 'ок' : t.error));
+  });
+  removeRows.sort(function (a, b) { return b - a; })   // снизу вверх, чтобы номера не сдвигались
+    .forEach(function (r) { sheet.deleteRow(r); });
+
+  ui.alert('Удалено: ' + removeRows.length + ' из ' + list.length +
+    (failed.length ? '\n\nНе удалось (строки оставлены):\n' + failed.join('\n') : ''));
+}
