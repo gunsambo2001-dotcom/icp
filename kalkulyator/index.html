@@ -181,7 +181,6 @@ footer{text-align:center;color:var(--tx3);font-size:13px;padding:36px 0 0;border
 
 <div class="tabs">
   <button class="tab on" data-p="calc">Калькулятор</button>
-  <button class="tab" data-p="money">Где мои деньги</button>
   <button class="tab" data-p="sim">Почему 1%, а не 10%</button>
   <button class="tab" data-p="help">Инструкция и формулы</button>
 </div>
@@ -289,17 +288,16 @@ footer{text-align:center;color:var(--tx3);font-size:13px;padding:36px 0 0;border
           <button data-v="spot">Спот</button>
         </div>
       </div>
-
-      <button class="btn gh" id="tgladv">Учесть издержки: комиссии, проскальзывание, фандинг ▾</button>
     </div>
 
+    <!-- Блок издержек скрыт навсегда: поля остаются в DOM (расчёт читает их), все значения = 0 -->
     <div class="card hide" id="advcard">
       <h2>Издержки</h2>
       <div class="f">
         <label>Комиссия биржи <span class="q" data-h="h-fee">?</span></label>
         <div class="row2">
-          <div class="ip"><input type="number" id="feeIn" value="0.05" step="any"><span class="u">% вход</span></div>
-          <div class="ip"><input type="number" id="feeOut" value="0.05" step="any"><span class="u">% выход</span></div>
+          <div class="ip"><input type="number" id="feeIn" value="0" step="any"><span class="u">% вход</span></div>
+          <div class="ip"><input type="number" id="feeOut" value="0" step="any"><span class="u">% выход</span></div>
         </div>
         <div class="hint" id="h-fee">Комиссия берётся с <b>общего объёма позиции</b>, а не с маржи. Зашёл на $100 маржи с плечом ×10 — комиссию считают с $1000.
           <span class="fx">Комиссия = Общий объём × Ставка% ÷ 100</span>
@@ -307,7 +305,7 @@ footer{text-align:center;color:var(--tx3);font-size:13px;padding:36px 0 0;border
       </div>
       <div class="f">
         <label>Проскальзывание <span class="q" data-h="h-slip">?</span></label>
-        <div class="ip"><input type="number" id="slip" value="0.05" step="any"><span class="u">%</span></div>
+        <div class="ip"><input type="number" id="slip" value="0" step="any"><span class="u">%</span></div>
         <div class="chips" id="slipchips">
           <span class="chip" data-v="0.15">Скальп 1–5м</span>
           <span class="chip on" data-v="0.05">Внутри дня 15м–1ч</span>
@@ -320,7 +318,7 @@ footer{text-align:center;color:var(--tx3);font-size:13px;padding:36px 0 0;border
       <div class="f fut">
         <label>Ставка финансирования <span class="q" data-h="h-fund">?</span></label>
         <div class="row2">
-          <div class="ip"><input type="number" id="fundRate" value="0.01" step="any"><span class="u">%/8ч</span></div>
+          <div class="ip"><input type="number" id="fundRate" value="0" step="any"><span class="u">%/8ч</span></div>
           <div class="ip"><input type="number" id="hours" value="8" step="any"><span class="u">часов</span></div>
         </div>
         <div class="hint" id="h-fund"><b>Это не комиссия биржи. Это плата между лонгами и шортами</b> — она держит цену фьючерса рядом со спотовой.
@@ -384,7 +382,7 @@ footer{text-align:center;color:var(--tx3);font-size:13px;padding:36px 0 0;border
 </div>
 </div>
 
-<!-- ══════════ ГДЕ МОИ ДЕНЬГИ ══════════ -->
+<!-- ══════════ ГДЕ МОИ ДЕНЬГИ (вкладка убрана из меню, страница остаётся: её заполняет calc) ══════════ -->
 <div class="page" id="p-money">
   <div class="grid">
     <div>
@@ -601,9 +599,6 @@ $('dir').onclick=e=>{if(!e.target.dataset.v)return;DIR=e.target.dataset.v;
     b.classList.toggle('long',b.dataset.v==='long');b.classList.toggle('short',b.dataset.v==='short');});
   const E=num('entry'),d=Math.abs(E-num('stop'))||E*0.02;
   $('stop').value=+(DIR==='long'?E-d:E+d).toFixed(2); applyRRprice(rrOf('rrchips2')); calc();};
-
-$('tgladv').onclick=()=>{const c=$('advcard'),o=c.classList.contains('hide');
-  c.classList.toggle('hide'); $('tgladv').textContent=o?'Скрыть издержки ▴':'Учесть издержки: комиссии, проскальзывание, фандинг ▾';};
 
 $('copy').onclick=()=>{const v=$('o-margin').textContent.replace(/[^\d.,]/g,'').replace(',','.');
   try{navigator.clipboard.writeText(v)}catch(e){
