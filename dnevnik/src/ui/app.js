@@ -336,7 +336,7 @@ function openPosRow(p) {
     }),
     h('div', {
       style: 'font-size:11px;color:var(--muted);margin-top:3px;',
-      text: `${p.closedSize > 0 ? `закрыто ${F.num(p.closedSize)} из ${F.num(p.totalSize)} · ` : ''}${t.currentPrice ? `нереализованный · ${F.rMult(p.rMultiple)}` : 'укажите текущую цену для нереализованного P&L'}`,
+      text: `${p.closedSize > 0 ? `закрыто ${F.num(p.closedSize)} из ${F.num(p.totalSize)} · ` : ''}${t.currentPrice ? `нереализованный · ${F.rMult(p.rMultiple)}` : 'позиция открыта'}`,
     }),
   ]);
 }
@@ -1533,7 +1533,6 @@ function openTradeForm(id) {
       h('div.adv-body', {}, [exitsBox]),
     ]),
     h('div.form-grid.three', {}, [
-      field('currentPrice', 'Текущая цена (для открытого остатка)', { type: 'number', step: 'any', mono: true }),
       field('feesPaid', 'Комиссии по факту, $', { type: 'number', step: '0.01', mono: true }),
       field('strategyId', 'Стратегия', { type: 'select', options: stratOptions }),
       field('session', 'Сессия', { type: 'select', options: [['', '—'], ['asia', 'Азия'], ['london', 'Лондон'], ['newyork', 'Нью-Йорк']] }),
