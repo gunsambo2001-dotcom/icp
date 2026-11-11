@@ -1283,6 +1283,7 @@ function openTradeForm(id) {
   }
   function refreshPlan() {
     syncSizeUsdField();
+    syncAdvHints();
     const entry = num(draft.entry);
     const stop = num(draft.initialStop);
     const riskPct = num(draft.riskPct);
@@ -1477,6 +1478,18 @@ function openTradeForm(id) {
 
   const stratOptions = [['', '—'], ...state.strategies.map((s) => [s.id, s.name])];
 
+  // Сводка в заголовках свёрнутых блоков и признак «данные уже есть» для авто-раскрытия.
+  const hasGoals = editing ? [draft.tp1, draft.tp2, draft.tp3].some((v) => num(v) > 0) : false;
+  const hasExits = editing ? (Array.isArray(draft.exits) && draft.exits.length > 0) : false;
+  const goalsHint = h('span.adv-hint');
+  const exitsHint = h('span.adv-hint');
+  function syncAdvHints() {
+    const targets = [draft.tp1, draft.tp2, draft.tp3].map((v) => num(v)).filter((n) => n > 0);
+    goalsHint.textContent = targets.length ? ' · ' + targets.join(' / ') : ' · не заданы';
+    const closed = (draft.exits || []).filter((e) => num(e.price) > 0).length;
+    exitsHint.textContent = closed ? ' · ' + closed : '';
+  }
+
   const body = h('div.modal-body', {}, [
     ocrBlock,
     editing ? null : h('div', {}, [
@@ -1498,21 +1511,26 @@ function openTradeForm(id) {
       FEATURES.positionCalc ? field('riskPct', 'Риск, %', { type: 'number', step: '0.1', mono: true, hint: 'для расчёта размера' }) : null,
       field('openedAt', 'Открыта', { type: 'datetime-local' }),
     ]),
-    h('div', {}, [
-      h('div.section-label', { style: 'margin:6px 0 8px;', text: 'Цели и перевод в безубыток' }),
-      h('div.form-grid.three', {}, [
-        field('tp1', 'TP1', { type: 'number', step: 'any', mono: true }),
-        field('tp2', 'TP2', { type: 'number', step: 'any', mono: true }),
-        field('tp3', 'TP3 (финальная)', { type: 'number', step: 'any', mono: true }),
-        field('tp1Pct', 'Фиксация на TP1, %', { type: 'number', step: '1', mono: true }),
-        field('tp2Pct', 'Фиксация на TP2, %', { type: 'number', step: '1', mono: true }),
-        field('beBuffer', 'Буфер безубытка (цена)', { type: 'number', step: 'any', mono: true, hint: '0 = ровно вход' }),
+    // Свёрнутые блоки: цели и частичные закрытия по умолчанию закрыты, чтобы форма
+    // была короче. Заголовок показывает сводку, а при редактировании сделки, где эти
+    // данные уже есть, блок раскрывается сам — иначе ученик не увидит, что заполнено.
+    h('details.adv', { open: editing ? hasGoals : false }, [
+      h('summary', {}, ['Цели и перевод в безубыток', goalsHint]),
+      h('div.adv-body', {}, [
+        h('div.form-grid.three', {}, [
+          field('tp1', 'TP1', { type: 'number', step: 'any', mono: true }),
+          field('tp2', 'TP2', { type: 'number', step: 'any', mono: true }),
+          field('tp3', 'TP3 (финальная)', { type: 'number', step: 'any', mono: true }),
+          field('tp1Pct', 'Фиксация на TP1, %', { type: 'number', step: '1', mono: true }),
+          field('tp2Pct', 'Фиксация на TP2, %', { type: 'number', step: '1', mono: true }),
+          field('beBuffer', 'Буфер безубытка (цена)', { type: 'number', step: 'any', mono: true, hint: '0 = ровно вход' }),
+        ]),
+        field('breakevenAfterTp1', 'После TP1 переносить стоп в безубыток', { type: 'checkbox' }),
       ]),
-      field('breakevenAfterTp1', 'После TP1 переносить стоп в безубыток', { type: 'checkbox' }),
     ]),
-    h('div', {}, [
-      h('div.section-label', { style: 'margin:6px 0 8px;', text: 'Частичные закрытия (факт)' }),
-      exitsBox,
+    h('details.adv', { open: editing ? hasExits : false }, [
+      h('summary', {}, ['Частичные закрытия (факт)', exitsHint]),
+      h('div.adv-body', {}, [exitsBox]),
     ]),
     h('div.form-grid.three', {}, [
       field('currentPrice', 'Текущая цена (для открытого остатка)', { type: 'number', step: 'any', mono: true }),

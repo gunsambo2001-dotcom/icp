@@ -309,3 +309,15 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   background: var(--surface-3); border: 1px solid var(--border-strong); border-radius: 9px;
   padding: 10px 16px; font-size: 13px; box-shadow: var(--shadow); z-index: 95;
 }
+
+/* ── свёрнутые блоки в форме сделки («Цели», «Частичные закрытия») ── */
+.adv { border: 1px solid var(--border); border-radius: 10px; margin: 10px 0; }
+.adv > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+  padding: 10px 12px; list-style: none; color: var(--ink); font-size: 12.5px;
+  letter-spacing: .06em; text-transform: uppercase; }
+.adv > summary::-webkit-details-marker { display: none; }
+.adv > summary::after { content: '▾'; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.adv[open] > summary::after { transform: rotate(180deg); }
+.adv[open] > summary { border-bottom: 1px solid var(--border); }
+.adv-hint { color: var(--muted); font-size: 12px; letter-spacing: 0; text-transform: none; }
+.adv-body { padding: 10px 12px 12px; }
