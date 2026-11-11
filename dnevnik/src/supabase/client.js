@@ -15,7 +15,7 @@ import { SUPABASE_URL, SUPABASE_URL_DIRECT, SUPABASE_PUBLISHABLE_KEY } from './c
 const isBrowser = typeof window !== 'undefined';
 const nativeFetch = isBrowser ? window.fetch.bind(window) : globalThis.fetch;
 const BASE_KEY = 'rj_sb_base';
-const PROBE_MS = 2500;
+const PROBE_MS = 4000;
 const BASES = [SUPABASE_URL, SUPABASE_URL_DIRECT];
 
 // Клиент всегда создаётся с SUPABASE_URL, поэтому все его запросы начинаются
