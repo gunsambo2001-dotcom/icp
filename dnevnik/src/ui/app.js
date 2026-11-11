@@ -1479,15 +1479,22 @@ function openTradeForm(id) {
   const stratOptions = [['', '—'], ...state.strategies.map((s) => [s.id, s.name])];
 
   // Сводка в заголовках свёрнутых блоков и признак «данные уже есть» для авто-раскрытия.
+  const SESSION_OPTIONS = [['', '—'], ['asia', 'Азия'], ['london', 'Лондон'], ['newyork', 'Нью-Йорк']];
+  const SESSION_LABEL = { asia: 'Азия', london: 'Лондон', newyork: 'Нью-Йорк' };
   const hasGoals = editing ? [draft.tp1, draft.tp2, draft.tp3].some((v) => num(v) > 0) : false;
   const hasExits = editing ? (Array.isArray(draft.exits) && draft.exits.length > 0) : false;
+  const hasAdvanced = editing ? !!(draft.strategyId || draft.session) : false;
   const goalsHint = h('span.adv-hint');
   const exitsHint = h('span.adv-hint');
+  const advHint = h('span.adv-hint');
   function syncAdvHints() {
     const targets = [draft.tp1, draft.tp2, draft.tp3].map((v) => num(v)).filter((n) => n > 0);
     goalsHint.textContent = targets.length ? ' · ' + targets.join(' / ') : ' · не заданы';
     const closed = (draft.exits || []).filter((e) => num(e.price) > 0).length;
     exitsHint.textContent = closed ? ' · ' + closed : '';
+    const strat = state.strategies.find((s) => s.id === draft.strategyId);
+    const extra = [strat && strat.name, SESSION_LABEL[draft.session]].filter(Boolean);
+    advHint.textContent = extra.length ? ' · ' + extra.join(' · ') : '';
   }
 
   const body = h('div.modal-body', {}, [
@@ -1532,10 +1539,17 @@ function openTradeForm(id) {
       h('summary', {}, ['Частичные закрытия (факт)', exitsHint]),
       h('div.adv-body', {}, [exitsBox]),
     ]),
+    h('details.adv', { open: editing ? hasAdvanced : false }, [
+      h('summary', {}, ['Дополнительно', advHint]),
+      h('div.adv-body', {}, [
+        h('div.form-grid.three', {}, [
+          field('strategyId', 'Стратегия', { type: 'select', options: stratOptions }),
+          field('session', 'Сессия', { type: 'select', options: SESSION_OPTIONS }),
+        ]),
+      ]),
+    ]),
     h('div.form-grid.three', {}, [
       field('feesPaid', 'Комиссии по факту, $', { type: 'number', step: '0.01', mono: true }),
-      field('strategyId', 'Стратегия', { type: 'select', options: stratOptions }),
-      field('session', 'Сессия', { type: 'select', options: [['', '—'], ['asia', 'Азия'], ['london', 'Лондон'], ['newyork', 'Нью-Йорк']] }),
       field('screenshot', 'Ссылка на график TradingView (наставник увидит её в сделке)', { span2: true, ph: 'https://www.tradingview.com/x/...' }),
       field('notes', 'Заметки', { type: 'textarea', span2: true }),
     ]),
