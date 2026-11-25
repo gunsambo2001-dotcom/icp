@@ -272,20 +272,141 @@ function findStream(code) {
   return null;
 }
 
-function findStudent(stream, name) {
-  const rows = studentsSheet().getDataRange().getValues();
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][2] === stream && String(rows[i][1]).toLowerCase() === name.toLowerCase()) {
-      return { uid: rows[i][0], name: rows[i][1], stream: rows[i][2] };
+// ---------- Одна учётка на ученика ----------
+// «Имя Фамилия» ученик вводит руками, поэтому одно и то же имя приходит с лишними
+// пробелами, в другом регистре, с «ё» или латинскими буквами вместо русских, а то и
+// с опечаткой. Раньше каждая такая мелочь создавала второго ученика с новым uid —
+// и его домашка «пропадала» (ответы привязаны к uid). Теперь имя сравнивается по
+// канонической форме, а похожее имя не создаёт новую учётку: вход только в найденную.
+
+// Латинские буквы, которые на вид не отличаются от русских.
+const NAME_LOOKALIKE = {
+  a: 'а', b: 'в', c: 'с', e: 'е', h: 'н', k: 'к',
+  m: 'м', o: 'о', p: 'р', t: 'т', x: 'х', y: 'у'
+};
+
+// Имя в том виде, в каком его стоит хранить: без невидимых символов, лишних пробелов
+// и разных тире. Регистр и буквы не меняет — ученик видит своё имя как вводил.
+function tidyName(s) {
+  return String(s == null ? '' : s)
+    .replace(/[\u00A0\u200B-\u200D\uFEFF\t\r\n]/g, ' ')
+    .replace(/[‐‑‒–—―−]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Ключ сравнения: «Иван  Иванов», «иван иванов», «Ивaн Иванов» (латинская a),
+// « Иван Иванов. » и «Иванов Иван» (перепутан порядок) дают один и тот же ключ.
+function canonName(s) {
+  return tidyName(s)
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[a-z]/g, function (c) { return NAME_LOOKALIKE[c] || c; })
+    .replace(/[^а-яa-z0-9\- ]/g, '')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .sort()
+    .join(' ');
+}
+
+// Расстояние Левенштейна: сколько символов надо исправить, чтобы имена совпали.
+function nameDistance(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = [], cur = [];
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
     }
+    const t = prev; prev = cur; cur = t;
   }
-  return null;
+  return prev[n];
+}
+
+// values — весь лист students, включая строку заголовков.
+// Возвращает { kind: 'exact' | 'similar' | 'none', row, index, distance }.
+function matchStudent(values, stream, name) {
+  const key = canonName(name);
+  if (!key) return { kind: 'none' };
+  let close = null, closeDist = 99;
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    if (!String(r[0] || '').trim()) continue;
+    if (String(r[2] || '').trim().toUpperCase() !== stream) continue;
+    const k = canonName(r[1]);
+    if (!k) continue;
+    if (k === key) return { kind: 'exact', row: r, index: i, distance: 0 };
+    // короткие имена сравниваем строго: «Ян» и «Яна» — разные люди,
+    // а опечатку ищем только в длинных (полное имя почти всегда длиннее 10 символов)
+    const limit = Math.min(key.length, k.length) >= 12 ? 2 : (Math.min(key.length, k.length) >= 6 ? 1 : 0);
+    const d = nameDistance(k, key);
+    if (d <= limit && d < closeDist) { close = r; closeDist = d; }
+  }
+  if (close) return { kind: 'similar', row: close, distance: closeDist };
+  return { kind: 'none' };
+}
+
+// Ответ на вход. Имя — ровно то, что в таблице (без правки краёв): это ключ, по
+// которому дневник и тренажёр находят свой профиль.
+function studentOk(uid, name, stream) {
+  return { ok: true, role: 'student', uid: String(uid), name: String(name == null ? '' : name).trim(),
+    stream: String(stream).trim().toUpperCase() };
 }
 
 function createStudent(stream, name) {
   const uid = 'u' + Date.now();
   studentsSheet().appendRow([uid, name, stream]);
-  return { uid, name, stream };
+  return { uid: uid, name: name, stream: stream };
+}
+
+// ── Проверка входа на реальных данных, ничего не меняя ─────────────────────
+// Apps Script → выбрать функцию testNameMatch → Run → «Журнал выполнения».
+// Берёт первых учеников первого потока из листа students и для каждого проверяет:
+// то же имя, оно же с лишними пробелами, с другим регистром, с обратным порядком слов
+// и с опечаткой (без последней буквы), плюс одно явно новое имя. В таблицу не пишет.
+function testNameMatch() {
+  const values = studentsSheet().getDataRange().getValues();
+  if (values.length < 2) { Logger.log('В листе students нет учеников — проверять нечего.'); return; }
+
+  const stream = String(values[1][2]).trim().toUpperCase();
+  const students = values.slice(1).filter(function (r) {
+    return String(r[0] || '').trim() && String(r[2] || '').trim().toUpperCase() === stream;
+  }).slice(0, 5);
+
+  let fail = 0;
+  function check(label, probe, expected) {
+    const r = matchStudent(values, stream, probe);
+    const uid = r.row ? String(r.row[0]) : '';
+    const good = r.kind === expected;
+    if (!good) fail++;
+    Logger.log((good ? 'OK   ' : 'FAIL ') + label + ' «' + probe + '» → ' + r.kind +
+      (uid ? ' → ' + uid : '') + (r.distance ? ' (d=' + r.distance + ')' : '') +
+      (good ? '' : '   ОЖИДАЛОСЬ ' + expected));
+  }
+
+  Logger.log('Поток ' + stream + ', учеников в таблице: ' + (values.length - 1) +
+    '. Проверяем ' + students.length + '.\n');
+
+  students.forEach(function (s) {
+    const name = tidyName(s[1]);
+    const words = name.split(' ');
+    check('то же имя           ', name, 'exact');
+    check('лишние пробелы      ', name.replace(/\s+/g, '  '), 'exact');
+    check('другой регистр      ', name.toUpperCase(), 'exact');
+    if (words.length > 1) check('обратный порядок    ', words.slice().reverse().join(' '), 'exact');
+    check('опечатка (буква)    ', name.slice(0, -1), canonName(name).length - 1 >= 7 ? 'similar' : 'none');
+    Logger.log('');
+  });
+
+  check('совсем новое имя    ', 'Проверка Тестовая', 'none');
+  Logger.log('\n' + (fail ? 'ЕСТЬ РАСХОЖДЕНИЯ: ' + fail : 'Всё сходится — вход ведёт себя как задумано.'));
 }
 
 function jsonOut(obj) {
@@ -315,7 +436,7 @@ function handleLogin(p) {
   }
 
   const stream = String(p.stream || '').trim().toUpperCase();
-  const name = String(p.name || '').trim();
+  const name = tidyName(p.name);
   if (!stream || !name) return jsonOut({ ok: false, error: 'Заполни код потока и имя.' });
 
   const st = findStream(stream);
@@ -326,9 +447,34 @@ function handleLogin(p) {
     return jsonOut({ ok: false, error: 'Этот поток закрыт. Напиши куратору.' });
   }
 
-  let s = findStudent(stream, name);
-  if (!s) s = createStudent(stream, name);
-  return jsonOut({ ok: true, role: 'student', uid: s.uid, name: s.name, stream: s.stream });
+  const values = studentsSheet().getDataRange().getValues();
+
+  // Второй шаг после предупреждения: ученик нажал «Это я» — входим в найденную
+  // учётку. Новую не создаём, поэтому домашка остаётся на месте.
+  // Имя возвращаем ровно как в таблице: по нему дневник и тренажёр ищут свой профиль,
+  // и если «почистить» его здесь, там появится второй профиль на новое написание.
+  if (p.confirm) {
+    const c = matchStudent(values, stream, tidyName(p.confirm));
+    if (c.kind === 'exact') return jsonOut(studentOk(c.row[0], c.row[1], stream));
+  }
+
+  const found = matchStudent(values, stream, name);
+  if (found.kind === 'exact') {
+    return jsonOut(studentOk(found.row[0], found.row[1], stream));
+  }
+  if (found.kind === 'similar') {
+    const shown = tidyName(found.row[1]);
+    return jsonOut({
+      ok: false,
+      code: 'similar',
+      foundName: shown,
+      error: 'Похоже, ты уже регистрировался как «' + shown + '». Второй аккаунт не создаём: ' +
+        'войди в свой прежний — иначе домашка останется на старом аккаунте.'
+    });
+  }
+
+  const s = createStudent(stream, name);
+  return jsonOut(studentOk(s.uid, s.name, stream));
 }
 
 function handleSubmit(p) {

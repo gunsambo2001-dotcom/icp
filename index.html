@@ -79,6 +79,10 @@ input,textarea{font-family:inherit}
 .btn.sm{padding:9px 14px;font-size:13px;border-radius:10px}
 .btn.okb{background:var(--up)} .btn.warnb{background:var(--warn)}
 .err{font-size:13.5px;font-weight:600;color:var(--down);margin-top:10px;display:none}
+/* предупреждение «второй аккаунт не создаём» */
+.warnbox{font-size:13.5px;font-weight:600;color:var(--tx);line-height:1.5;margin-top:12px;padding:12px 14px;
+  border-radius:12px;background:rgba(255,176,32,.12);border:1px solid rgba(255,176,32,.45);display:none}
+.warnbox b{color:var(--warn)}
 
 /* подсказка-легенда на входе */
 .what{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
@@ -173,9 +177,11 @@ tbody tr:hover{background:var(--card2)}
       <h2>Привет! Это твой кабинет 👋</h2>
       <p class="sub" style="margin:8px 0 20px">Без паролей и регистраций. Код потока тебе дал куратор — введи его и своё имя.</p>
       <div class="fld"><label>Код потока</label><input id="inStream" placeholder="например, ПОТОК-7" autocomplete="off"></div>
-      <div class="fld"><label>Имя и фамилия</label><input id="inName" placeholder="как тебя зовут в чате менторства" autocomplete="off"></div>
+      <div class="fld"><label>Имя и фамилия</label><input id="inName" placeholder="как тебя зовут в чате менторства" autocomplete="off">
+        <div class="sub" style="font-size:12px;margin-top:6px">Один человек — один кабинет. Пиши так же, как в первый раз: лишние пробелы и регистр не помешают.</div></div>
       <button class="btn full" onclick="doLogin()">Войти</button>
       <p class="err" id="loginErr"></p>
+      <div class="warnbox" id="loginSimilar"></div>
       <div class="what">
         <div class="w"><b>📝 Домашка</b><span>Задания после каждого модуля. Тесты проверяются сразу, развёрнутые ответы смотрит куратор.</span></div>
         <div class="w"><b>📈 Тренажёр графика</b><span>Учись видеть уровни и фигуры на реальных графиках — как на уроках модуля 4.</span></div>
@@ -301,21 +307,91 @@ const TASKS=[
 ];
 
 /* ================== БАЗА: реальный API или локальная заглушка ================== */
-const API_URL='https://script.google.com/macros/s/AKfycbxV5e3F0SB1io48D3RiMauZKxGXg2_MJG02LhQZ82ZgzGk31T8h7F-tNY43r6aFAxZe/exec';
+/* Адрес базы. Для проверки входа без Google: открой index.html?api=mock —
+   данные живут в localStorage этого браузера, реальная таблица не затрагивается.
+   ?api=mock&reset=1 — то же, но с чистого листа (удаляет тестовые данные). */
+const PROD_API='https://script.google.com/macros/s/AKfycbxV5e3F0SB1io48D3RiMauZKxGXg2_MJG02LhQZ82ZgzGk31T8h7F-tNY43r6aFAxZe/exec';
+const QS=new URLSearchParams(location.search);
+const MOCK=QS.get('api')==='mock';
+const API_URL=MOCK?'':PROD_API;
+if(MOCK&&QS.get('reset')){ localStorage.removeItem('icp_hw'); localStorage.removeItem('icp_hw_me'); }
+if(MOCK){
+  const b=document.createElement('div');
+  b.textContent='🧪 локальный тест — данные только в этом браузере';
+  b.style.cssText='position:fixed;right:12px;bottom:12px;z-index:9999;background:#ffb020;color:#04130d;'+
+    'font:800 12px/1.3 system-ui,sans-serif;padding:7px 11px;border-radius:9px;box-shadow:0 6px 18px -8px #000';
+  document.body.appendChild(b);
+}
 const STREAMS=['ПОТОК-7']; // только для локальной заглушки (когда API_URL пуст); реальные потоки — лист "streams" в таблице
 
 const LS='icp_hw';
 function db(){ try{return JSON.parse(localStorage.getItem(LS))||{students:[],answers:[]}}catch(e){return{students:[],answers:[]}} }
 function dbSave(d){ localStorage.setItem(LS,JSON.stringify(d)); }
+
+/* Одна учётка на ученика (та же логика, что в apps-script-hub.gs — только для
+   локальной заглушки без сервера). Имя сравнивается по канонической форме, а не
+   по точному совпадению: «Иван  Иванов», «иван иванов» и «Ивaн Иванов» — один человек. */
+const NAME_LOOKALIKE={a:'а',b:'в',c:'с',e:'е',h:'н',k:'к',m:'м',o:'о',p:'р',t:'т',x:'х',y:'у'};
+function tidyName(s){
+  return String(s==null?'':s).replace(/[\u00A0\u200B-\u200D\uFEFF\t\r\n]/g,' ')
+    .replace(/[‐‑‒–—―−]/g,'-').replace(/\s+/g,' ').trim();
+}
+function canonName(s){
+  return tidyName(s).toLowerCase().replace(/ё/g,'е')
+    .replace(/[a-z]/g,c=>NAME_LOOKALIKE[c]||c)
+    .replace(/[^а-яa-z0-9\- ]/g,'').replace(/-/g,' ').replace(/\s+/g,' ').trim()
+    .split(' ').sort().join(' ');
+}
+function nameDistance(a,b){
+  if(a===b) return 0;
+  const m=a.length,n=b.length;
+  if(!m) return n; if(!n) return m;
+  let prev=[],cur=[];
+  for(let j=0;j<=n;j++) prev[j]=j;
+  for(let i=1;i<=m;i++){
+    cur[0]=i;
+    for(let j=1;j<=n;j++){
+      const cost=a.charAt(i-1)===b.charAt(j-1)?0:1;
+      cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+cost);
+    }
+    const t=prev; prev=cur; cur=t;
+  }
+  return prev[n];
+}
+// Тот же результат, что matchStudent() на сервере: exact | similar | none.
+function matchMock(list,stream,name){
+  const key=canonName(name); if(!key) return {kind:'none'};
+  let close=null,closeDist=99;
+  list.forEach(s=>{
+    if(s.stream!==stream) return;
+    const k=canonName(s.name); if(!k) return;
+    if(k===key){ close={kind:'exact',student:s}; closeDist=0; return; }
+    const limit=Math.min(key.length,k.length)>=12?2:(Math.min(key.length,k.length)>=6?1:0);
+    const d=nameDistance(k,key);
+    if(d<=limit&&d<closeDist){ closeDist=d; close={kind:'similar',student:s}; }
+  });
+  return closeDist===0&&close?{kind:'exact',student:close.student}:(close||{kind:'none'});
+}
+
 function apiMock(action,p){
   const d=db();
   if(action==='login'){
-    const stream=(p.stream||'').trim().toUpperCase(), name=(p.name||'').trim();
+    const stream=(p.stream||'').trim().toUpperCase(), name=tidyName(p.name);
     if(!stream||!name) return {ok:false,error:'Заполни код потока и имя.'};
     if(stream==='ДЕМО-КУРАТОР') return {ok:true,role:'owner',name:name,token:'demo'};
     if(STREAMS.indexOf(stream)<0) return {ok:false,error:'Такого потока нет. Проверь код — его давал куратор.'};
-    let s=d.students.find(x=>x.stream===stream&&x.name.toLowerCase()===name.toLowerCase());
-    if(!s){ s={uid:'u'+Date.now(),name,stream}; d.students.push(s); dbSave(d); }
+    if(p.confirm){
+      const c=matchMock(d.students,stream,tidyName(p.confirm));
+      if(c.kind==='exact') return {ok:true,role:'student',uid:c.student.uid,name:c.student.name,stream:c.student.stream};
+    }
+    const found=matchMock(d.students,stream,name);
+    if(found.kind==='exact') return {ok:true,role:'student',uid:found.student.uid,name:found.student.name,stream:found.student.stream};
+    if(found.kind==='similar'){
+      const shown=tidyName(found.student.name);
+      return {ok:false,code:'similar',foundName:shown,
+        error:'Похоже, ты уже регистрировался как «'+shown+'». Второй аккаунт не создаём: войди в свой прежний — иначе домашка останется на старом аккаунте.'};
+    }
+    const s={uid:'u'+Date.now(),name,stream}; d.students.push(s); dbSave(d);
     return {ok:true,role:'student',uid:s.uid,name:s.name,stream:s.stream};
   }
   if(action==='submit'){
@@ -466,9 +542,27 @@ function preloadTools(){
   // Дневник в фоне не грузим: скрытая рамка не отрисовывается, а токен входа одноразовый — открываем по клику на вкладку.
   document.querySelectorAll('iframe[data-src]').forEach(fr=>{ if(fr.dataset.src!=='diary-bridge') loadFrame(fr); });
 }
-async function doLogin(){
-  const r=await api('login',{stream:$('inStream').value,name:$('inName').value});
-  if(!r.ok){ const e=$('loginErr'); e.textContent=r.error; e.style.display='block'; return; }
+// Второго аккаунта не создаём: сервер вернул code:'similar' и имя, под которым
+// ученик уже регистрировался. Показываем предупреждение и даём войти в ту учётку.
+var SIMILAR=null;
+function hideSimilar(){
+  const b=$('loginSimilar'); if(b){ b.style.display='none'; b.innerHTML=''; }
+  SIMILAR=null;
+}
+function showSimilar(found,text){
+  SIMILAR=found||null;
+  const b=$('loginSimilar');
+  b.innerHTML='<b>⚠️ Второй аккаунт не создаём.</b><br>'+esc(text)+
+    (found?'<br><button class="btn sm" style="margin-top:10px" onclick="doLogin(SIMILAR)">Это я — войти в свой аккаунт</button>':'');
+  b.style.display='block';
+}
+async function doLogin(confirmName){
+  const err=$('loginErr'); err.style.display='none'; hideSimilar();
+  const r=await api('login',{stream:$('inStream').value,name:$('inName').value,confirm:confirmName||''});
+  if(!r.ok){
+    if(r.code==='similar'){ showSimilar(r.foundName,r.error); return; }
+    err.textContent=r.error; err.style.display='block'; return;
+  }
   ME=r; saveSession(); boot();
 }
 
