@@ -423,6 +423,7 @@ function doPost(e) {
   if (action === 'my') return handleMy(body);
   if (action === 'curator') return handleCurator(body);
   if (action === 'grade') return handleGrade(body);
+  if (action === 'delete_students') return handleDeleteStudents(body);
   if (action === 'bridge') return handleBridge(body);
   if (action === 'diary_bridge') return handleDiaryBridge(body);
   return jsonOut({ ok: false, error: 'unknown action' });
@@ -549,6 +550,75 @@ function rowToObj(headers, row) {
   const obj = {};
   headers.forEach(function (h, i) { obj[h] = row[i]; });
   return obj;
+}
+
+// ── Удаление учеников из кабинета куратора ─────────────────────────────────
+// Кнопка в списке «Куратор» на сайте: ученик удаляется в дневнике, в тренажёре,
+// его ответы — из answers и an_students, строка — из students.
+// Если профиль в дневнике или тренажёре удалить не удалось, ученика не трогаем
+// совсем: иначе получится полуудалённое состояние. Права: только свои потоки.
+function handleDeleteStudents(p) {
+  const m = authMentor(p.token);
+  if (!m) return jsonOut({ ok: false, error: 'auth' });
+
+  const uids = (p.uids || []).map(function (x) { return String(x); });
+  if (!uids.length) return jsonOut({ ok: false, error: 'Не выбран ни один ученик' });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const allowed = streamsFor(m).map(function (x) { return x.code; });
+    const sSheet = studentsSheet();
+    const sRows = sSheet.getDataRange().getValues();
+    const targets = [];
+    for (let i = 1; i < sRows.length; i++) {
+      const uid = String(sRows[i][0] || '').trim();
+      if (!uid || uids.indexOf(uid) < 0) continue;
+      const stream = String(sRows[i][2] || '').trim().toUpperCase();
+      if (allowed.indexOf(stream) < 0) continue;   // чужой поток не трогаем
+      targets.push({ uid: uid, name: String(sRows[i][1]).trim(), stream: stream, row: i + 1 });
+    }
+    if (!targets.length) return jsonOut({ ok: false, error: 'Ученики не найдены или не из ваших потоков' });
+
+    // 1. Сначала профили в дневнике и тренажёре.
+    const ready = [], failed = [];
+    targets.forEach(function (t) {
+      const d = softDeleteBridge('DIARY_BRIDGE_URL', 'DIARY_BRIDGE_SECRET', t.stream, t.name);
+      const tr = softDeleteBridge('TRAINER_BRIDGE_URL', 'BRIDGE_SHARED_SECRET', t.stream, t.name);
+      if (d.ok && tr.ok) ready.push(t);
+      else failed.push({ name: t.name,
+        error: 'дневник — ' + (d.ok ? 'ок' : d.error) + '; тренажёр — ' + (tr.ok ? 'ок' : tr.error) });
+    });
+
+    // 2. Только тем, кто удалился везде: ответы, аналитика, строка в students.
+    const readyUids = ready.map(function (t) { return t.uid; });
+    if (readyUids.length) {
+      deleteByUid(answersSheet(), 1, readyUids);      // в answers uid во второй колонке
+      const an = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('an_students');
+      if (an) deleteByUid(an, 2, readyUids);          // в an_students uid в третьей
+      ready.sort(function (a, b) { return b.row - a.row; })   // снизу вверх
+        .forEach(function (t) { sSheet.deleteRow(t.row); });
+    }
+
+    return jsonOut({ ok: true, deleted: ready.map(function (t) { return t.name; }), failed: failed });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Удаляет строки листа, у которых в колонке col (0-based) значение из uids. Снизу вверх.
+function deleteByUid(sheet, col, uids) {
+  const rows = sheet.getDataRange().getValues();
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (uids.indexOf(String(rows[i][col] || '').trim()) >= 0) sheet.deleteRow(i + 1);
+  }
+}
+
+// callDeleteBridge, но «мост не настроен» — это не ошибка: удалять там нечего.
+function softDeleteBridge(urlProp, secretProp, stream, name) {
+  const r = callDeleteBridge(urlProp, secretProp, stream, name);
+  if (!r.ok && /не настроен/.test(String(r.error || ''))) return { ok: true, skipped: true };
+  return r;
 }
 
 // Мост в тренажёр: секрет остаётся здесь, на сервере, никогда не уходит в браузер студента.

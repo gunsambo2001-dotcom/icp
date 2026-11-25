@@ -135,6 +135,12 @@ th,td{border-bottom:1px solid var(--line);padding:11px 13px;text-align:left}
 th{background:var(--card2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
 tbody tr{cursor:pointer;transition:.12s}
 tbody tr:hover{background:var(--card2)}
+/* удаление учеников в кабинете куратора */
+th.delcol,td.delcol{width:34px;padding-right:0}
+td.delcol input{width:16px;height:16px;cursor:pointer;accent-color:var(--down);vertical-align:-3px}
+#delBar{display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 10px}
+#delBar .sub{font-size:12.5px}
+tr.picked{background:rgba(255,92,92,.1)!important}
 .badge{font-weight:800}.gg{color:var(--up)}.rr{color:var(--down)}.yy{color:var(--warn)}
 
 /* встроенные инструменты */
@@ -670,6 +676,7 @@ async function submitModule(mid){
 
 /* ================== КУРАТОР ================== */
 let curFilter='';
+let CUR_STUDS=[], CUR_CNT={}, DEL=new Set();   // DEL — отмеченные к удалению uid
 const STALE_DAYS=7; // через сколько дней без отправок ученик подсвечивается на «Куратор»
 async function loadCurator(){
   const r=await api('curator',{});
@@ -690,14 +697,17 @@ async function loadCurator(){
   const testCell=c=>c.t?`<span class="badge gg">${c.tok}</span> из ${c.t} · ${pc(c.tok,c.t)}`:'—';
   const openCell=c=>c.o?`<span class="badge gg">${c.pass}</span> / <span class="badge rr">${c.fail}</span> / <span class="badge yy">${c.pend}</span>`:'—';
   const now=Date.now();
+  CUR_STUDS=studs; CUR_CNT={};
   let rows='';
   studs.forEach(s=>{
     const mine=ans.filter(a=>a.uid===s.uid);
     const c=cnt(mine);
+    CUR_CNT[s.uid]=mine.length;
     const last=Math.max(0,...mine.map(a=>Number(a.ts)||0));
     const stale=!last||now-last>STALE_DAYS*864e5;
     const mods=new Set(mine.map(a=>a.module)).size;
-    rows+=`<tr onclick="openStudent('${s.uid}')"${stale?' style="background:rgba(255,176,32,.1)"':''}>
+    rows+=`<tr onclick="openStudent('${s.uid}')" class="${DEL.has(s.uid)?'picked':''}"${stale?' style="background:rgba(255,176,32,.1)"':''}>
+      <td class="delcol"><input type="checkbox" data-uid="${s.uid}"${DEL.has(s.uid)?' checked':''} title="Отметить к удалению" onclick="event.stopPropagation()" onchange="selDel(this)"></td>
       <td><b>${esc(s.name)}</b></td><td>${esc(s.stream)}</td><td>${mods} из ${TASKS.length}</td>
       <td>${testCell(c)}</td><td>${openCell(c)}</td>
       <td>${last?new Date(last).toLocaleDateString('ru-RU')+(stale?' ⚠️':''):'не сдавал ⚠️'}</td></tr>`;
@@ -714,11 +724,48 @@ async function loadCurator(){
       <div class="stat"><div class="l">Ответов всего</div><div class="v">${ans.length}</div></div>
       <div class="stat"><div class="l">Ждут проверки</div><div class="v y">${totPend}</div></div>
     </div>
-    ${studs.length?`<table><thead><tr><th>Ученик</th><th>Поток</th><th>Модулей</th><th>Тесты</th><th>Открытые: зачёт / доработка / ждут</th><th>Последняя отправка</th></tr></thead><tbody>${rows}</tbody></table>
+    ${studs.length?`<div id="delBar">
+      <button class="btn warnb sm" onclick="delSelected(this)">🗑 Удалить выбранных (<span id="delN">0</span>)</button>
+      <span class="sub">профиль в дневнике и тренажёре, ответы и строка в таблице — навсегда</span></div>
+    <table><thead><tr><th class="delcol"></th><th>Ученик</th><th>Поток</th><th>Модулей</th><th>Тесты</th><th>Открытые: зачёт / доработка / ждут</th><th>Последняя отправка</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="sub" style="margin-top:8px;font-size:13px">Жёлтым выделены ученики, которые не сдавали больше ${STALE_DAYS} дн. или ещё ничего не сдавали.</p>`
       :'<div class="card"><p class="sub">Пока никто из учеников не заходил.</p></div>'}
     ${modRows?`<h3 style="font-size:17px;margin:22px 0 10px">По модулям</h3>
       <table><thead><tr><th>Модуль</th><th>Сдали</th><th>Тесты</th><th>Открытые: зачёт / доработка / ждут</th><th>% зачёта открытых</th></tr></thead><tbody>${modRows}</tbody></table>`:''}`;
+  updDel();
+}
+
+// Отметка «удалить» в списке куратора
+function selDel(el){
+  const uid=el.dataset.uid;
+  if(el.checked) DEL.add(uid); else DEL.delete(uid);
+  const row=el.closest('tr'); if(row) row.classList.toggle('picked',el.checked);
+  updDel();
+}
+function updDel(){
+  const bar=$('delBar'), n=DEL.size;
+  if(bar) bar.style.display=n?'flex':'none';
+  const c=$('delN'); if(c) c.textContent=n;
+}
+async function delSelected(btn){
+  const ids=[...DEL];
+  if(!ids.length) return;
+  const names=ids.map(u=>{const s=CUR_STUDS.find(x=>x.uid===u); return '• '+(s?s.name+' ('+s.stream+')':u);});
+  const ansAll=ids.reduce((n,u)=>n+(CUR_CNT[u]||0),0);
+  if(!confirm('Удалить '+ids.length+' — везде?\n\n'+names.join('\n')+
+    '\n\nБудет удалено: профиль в дневнике, профиль в тренажёре, ответов — '+ansAll+
+    ', строка в таблице.\nВосстановить нельзя.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='Удаляю…'; }
+  let r;
+  try{ r=await api('delete_students',{uids:ids}); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🗑 Удалить выбранных'; } }
+  if(!r||!r.ok){ alert('Не удалось: '+((r&&r.error)||'ошибка сети')); return; }
+  DEL.clear(); updDel();
+  if((r.failed||[]).length){
+    alert('Удалено: '+(r.deleted||[]).length+' из '+ids.length+'\n\nНе удалось (оставлены):\n'+
+      r.failed.map(f=>'• '+f.name+' — '+f.error).join('\n'));
+  }
+  loadCurator();
 }
 async function openStudent(uid){
   const r=await api('curator',{});
